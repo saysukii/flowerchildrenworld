@@ -7,7 +7,14 @@ RUN npm ci
 
 COPY . .
 
-# Railway: mark VITE_* variables as "Available during build" in the service settings.
+# Railway injects service variables as Docker build args when declared here.
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_PUBLISHABLE_KEY
+ARG VITE_SUPABASE_PROJECT_ID
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
+ENV VITE_SUPABASE_PROJECT_ID=$VITE_SUPABASE_PROJECT_ID
+
 RUN npm run build
 
 FROM node:22-alpine AS runner
