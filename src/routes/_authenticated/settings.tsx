@@ -32,6 +32,10 @@ import {
 } from "@/lib/integrations-config";
 import { loadTeamMembers, saveTeamMembers, seedTeamForUser, type TeamMember } from "@/lib/team-members";
 import { getDisplayName, isAdmin } from "@/lib/user-role";
+import {
+  GOOGLE_INTEGRATION_SCOPES,
+  googleIntegrationFromSession,
+} from "@/lib/google";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -106,14 +110,33 @@ function SettingsPage() {
   const [connectingNotion, setConnectingNotion] = useState(false);
   const [connectingLuma, setConnectingLuma] = useState(false);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [googleHasApiAccess, setGoogleHasApiAccess] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
   const [signOutAllOpen, setSignOutAllOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
+  const syncGoogleIntegration = useCallback((session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]) => {
+    const google = googleIntegrationFromSession(session);
+    setGoogleHasApiAccess(google.hasApiAccess);
+    setIntegrations((prev) => {
+      const next = {
+        ...prev,
+        google: {
+          connected: google.connected,
+          accountName: google.accountName,
+          spreadsheetId: prev.google.spreadsheetId,
+        },
+      };
+      saveIntegrations(next);
+      return next;
+    });
+    return google;
+  }, []);
+
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
+      const { data } = await supabase.auth.getSession();
+      const user = data.session?.user;
       if (user?.email) {
         setEmail(user.email);
         const name = getDisplayName(user);
@@ -125,9 +148,20 @@ function SettingsPage() {
         setTeam(loadTeamMembers());
       }
       setIntegrations(loadIntegrations());
+      syncGoogleIntegration(data.session);
       setReady(true);
     })();
-  }, []);
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      syncGoogleIntegration(session);
+      if (session?.provider_token) {
+        setConnectingGoogle(false);
+        toast.success("Google Calendar & Sheets access enabled.");
+      }
+    });
+
+    return () => authListener.subscription.unsubscribe();
+  }, [syncGoogleIntegration]);
 
   const persistTeam = useCallback((members: TeamMember[]) => {
     setTeam(members);
@@ -226,7 +260,14 @@ function SettingsPage() {
     setConnectingGoogle(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/settings` },
+      options: {
+        redirectTo: `${window.location.origin}/settings`,
+        scopes: GOOGLE_INTEGRATION_SCOPES,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     });
     if (error) {
       setConnectingGoogle(false);
@@ -235,10 +276,11 @@ function SettingsPage() {
   }
 
   function disconnectGoogle() {
-    const next = { ...integrations, google: { connected: false, accountName: "" } };
+    const next = { ...integrations, google: { connected: false, accountName: "", spreadsheetId: "" } };
     setIntegrations(next);
     saveIntegrations(next);
-    toast.success("Google disconnected.");
+    setGoogleHasApiAccess(false);
+    toast.success("Google disconnected in this workspace.");
   }
 
   async function connectStripe() {
@@ -396,13 +438,25 @@ function SettingsPage() {
                 />
                 <IntegrationCard
                   title="Google"
-                  description="Calendar sync for programming and events."
+                  description="Calendar sync and Google Sheets import for Community."
                   connected={integrations.google.connected}
                   accountName={integrations.google.accountName}
-                  connectLabel="Connect to Google"
+                  connectLabel={
+                    integrations.google.connected
+                      ? "Enable Calendar & Sheets access"
+                      : "Connect to Google"
+                  }
                   connecting={connectingGoogle}
                   onConnect={connectGoogle}
                   onDisconnect={disconnectGoogle}
+                  connectedNote={
+                    integrations.google.connected && !googleHasApiAccess
+                      ? "Signed in with Google — enable access for Calendar & Sheets."
+                      : integrations.google.connected && googleHasApiAccess
+                        ? "Calendar & Sheets access enabled."
+                        : undefined
+                  }
+                  showConnectWhenConnected={integrations.google.connected && !googleHasApiAccess}
                 />
                 <IntegrationCard
                   title="Stripe"
@@ -531,6 +585,8 @@ function IntegrationCard({
   connecting,
   onConnect,
   onDisconnect,
+  connectedNote,
+  showConnectWhenConnected = false,
 }: {
   title: string;
   description: string;
@@ -540,6 +596,8 @@ function IntegrationCard({
   connecting: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
+  connectedNote?: string;
+  showConnectWhenConnected?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-black/5 bg-white p-4 sm:p-5">
@@ -551,15 +609,33 @@ function IntegrationCard({
         <StatusBadge connected={connected} />
       </div>
       {connected ? (
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <p className="text-sm font-light text-foreground/70">{accountName}</p>
-          <button
-            type="button"
-            onClick={onDisconnect}
-            className="shrink-0 text-xs text-foreground/50 hover:text-foreground"
-          >
-            Disconnect
-          </button>
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-light text-foreground/70">{accountName}</p>
+              {connectedNote ? (
+                <p className="mt-1 text-xs text-foreground/50">{connectedNote}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={onDisconnect}
+              className="shrink-0 text-xs text-foreground/50 hover:text-foreground"
+            >
+              Disconnect
+            </button>
+          </div>
+          {showConnectWhenConnected ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onConnect}
+              disabled={connecting}
+              className="rounded-full"
+            >
+              {connecting ? <Loader2 className="size-4 animate-spin" /> : connectLabel}
+            </Button>
+          ) : null}
         </div>
       ) : (
         <Button

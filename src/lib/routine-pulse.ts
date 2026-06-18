@@ -18,6 +18,7 @@ export const DAYS: { key: DayKey; label: string; short: string }[] = [
 ];
 
 const STORAGE_KEY = "fcw-routine-pulse";
+const MON_RESTORED_KEY = "fcw-routine-pulse-mon-restored-v1";
 
 export const DEFAULT_RITUALS: Ritual[] = [
   { id: "mon", day: "mon", prompt: "Plan the week — review programming + outreach goals", active: true },
@@ -29,13 +30,28 @@ export const DEFAULT_RITUALS: Ritual[] = [
   { id: "sun", day: "sun", prompt: "Rest, reflect, and journal the week", active: true },
 ];
 
+export function defaultRitualForDay(day: DayKey): Ritual {
+  const found = DEFAULT_RITUALS.find((r) => r.day === day);
+  if (!found) throw new Error(`No default ritual for ${day}`);
+  return { ...found, id: crypto.randomUUID() };
+}
+
 export function loadRituals(): Ritual[] {
   if (typeof window === "undefined") return DEFAULT_RITUALS;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_RITUALS;
-    const parsed = JSON.parse(raw) as Ritual[];
-    return Array.isArray(parsed) ? parsed : DEFAULT_RITUALS;
+    let rituals = raw ? (JSON.parse(raw) as Ritual[]) : DEFAULT_RITUALS;
+    if (!Array.isArray(rituals)) rituals = DEFAULT_RITUALS;
+
+    if (!localStorage.getItem(MON_RESTORED_KEY)) {
+      if (!rituals.some((r) => r.day === "mon")) {
+        rituals = [...rituals, defaultRitualForDay("mon")];
+        saveRituals(rituals);
+      }
+      localStorage.setItem(MON_RESTORED_KEY, "1");
+    }
+
+    return rituals;
   } catch {
     return DEFAULT_RITUALS;
   }

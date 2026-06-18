@@ -2,6 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -50,6 +60,7 @@ function RoutinePulsePage() {
   const [rituals, setRituals] = useState<Ritual[]>(DEFAULT_RITUALS);
   const [ready, setReady] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Ritual | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ day: "mon", prompt: "", active: true });
 
@@ -97,8 +108,10 @@ function RoutinePulsePage() {
     setDialogOpen(false);
   }
 
-  function handleDelete(id: string) {
-    persist(rituals.filter((r) => r.id !== id));
+  function confirmDelete() {
+    if (!deleteTarget) return;
+    persist(rituals.filter((r) => r.id !== deleteTarget.id));
+    setDeleteTarget(null);
   }
 
   function toggleActive(id: string, active: boolean) {
@@ -166,7 +179,7 @@ function RoutinePulsePage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(ritual.id)}
+                          onClick={() => setDeleteTarget(ritual)}
                           className="rounded-md p-2 text-foreground/60 hover:bg-black/5 hover:text-foreground"
                           aria-label="Delete ritual"
                         >
@@ -248,6 +261,31 @@ function RoutinePulsePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-normal">Delete this?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteTarget
+                  ? `${DAYS.find((d) => d.key === deleteTarget.day)?.label ?? deleteTarget.day}: “${deleteTarget.prompt}” will be removed.`
+                  : null}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  confirmDelete();
+                }}
+                className="bg-[#C53D3D] text-white hover:bg-[#C53D3D]/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppShell>
   );

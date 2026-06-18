@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { Plus } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -57,14 +56,6 @@ function DashboardPage() {
             <p className="mt-4 text-sm text-foreground/60 leading-relaxed">
               Nothing scheduled today — a good day to rest or get ahead.
             </p>
-            <a
-              href="#"
-              className="mt-6 inline-flex items-center gap-1.5 text-sm font-normal"
-              style={{ color: "#3AB819" }}
-            >
-              <Plus className="h-4 w-4" />
-              Add event
-            </a>
           </Card>
 
           <Card>
@@ -86,7 +77,7 @@ function DashboardPage() {
           <Label>This Week</Label>
           <h2 className="mt-2 text-xl font-normal">Upcoming programming</h2>
           <p className="mt-4 text-sm text-foreground/60 leading-relaxed">
-            Nothing on the calendar yet. Add your next activation.
+            Nothing on the calendar yet.
           </p>
         </Card>
       </div>

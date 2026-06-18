@@ -4,7 +4,6 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
-  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -114,12 +113,10 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const showGlitterTrail = pathname !== "/auth";
 
   return (
     <QueryClientProvider client={queryClient}>
-      {showGlitterTrail && <GlitterCursorTrail />}
+      <GlitterCursorTrail />
       <Outlet />
       <Toaster position="top-center" />
     </QueryClientProvider>

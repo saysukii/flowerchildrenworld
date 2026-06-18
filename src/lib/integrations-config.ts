@@ -1,6 +1,7 @@
 export type OAuthIntegration = {
   connected: boolean;
   accountName: string;
+  spreadsheetId?: string;
 };
 
 export type IntegrationsConfig = {
@@ -22,7 +23,11 @@ const EMPTY: IntegrationsConfig = {
 function parseIntegration(value: unknown): OAuthIntegration {
   if (value && typeof value === "object" && "connected" in value) {
     const v = value as OAuthIntegration;
-    return { connected: Boolean(v.connected), accountName: v.accountName ?? "" };
+    return {
+      connected: Boolean(v.connected),
+      accountName: v.accountName ?? "",
+      spreadsheetId: v.spreadsheetId,
+    };
   }
   return { connected: false, accountName: "" };
 }

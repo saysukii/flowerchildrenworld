@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import fcwLogo from "@/assets/fcw-full-logo.png.asset.json";
-import fcwFlower from "@/assets/fcw-flower.png.asset.json";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -73,8 +72,7 @@ function AuthPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen w-full cursor-none items-center justify-center bg-background px-5 [&_*]:cursor-none">
-      <FcwFlowerCursor />
+    <main className="relative flex min-h-screen w-full items-center justify-center bg-background px-5">
       <div className="absolute inset-x-0 top-6 flex justify-center sm:top-8">
         <img
           src={fcwLogo.url}
@@ -181,43 +179,6 @@ function AuthPage() {
         </div>
       </div>
     </main>
-  );
-}
-
-function FcwFlowerCursor() {
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const [enabled, setEnabled] = useState(false);
-
-  useEffect(() => {
-    const finePointer = window.matchMedia("(pointer: fine)").matches;
-    setEnabled(finePointer);
-    if (!finePointer) return;
-
-    const onMove = (e: MouseEvent) => setPos({ x: e.clientX, y: e.clientY });
-    const onLeave = () => setPos(null);
-
-    window.addEventListener("mousemove", onMove);
-    document.documentElement.addEventListener("mouseleave", onLeave);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      document.documentElement.removeEventListener("mouseleave", onLeave);
-    };
-  }, []);
-
-  if (!enabled || !pos) return null;
-
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-1/2"
-      style={{ left: pos.x, top: pos.y }}
-    >
-      <img
-        src={fcwFlower.url}
-        alt=""
-        className="fcw-flower-spin h-7 w-7 object-contain"
-      />
-    </div>
   );
 }
 

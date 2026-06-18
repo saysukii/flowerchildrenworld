@@ -34,7 +34,7 @@ Three ways to sign in on every return visit:
 
 ## What's inside
 
-The sidebar is your map. Each section serves a specific purpose for how FCW operates day to day.
+The menu is your map. Each section serves a specific purpose for how Flower Children World operates day to day.
 
 ### Home (`/dashboard`)
 
