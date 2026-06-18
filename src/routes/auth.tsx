@@ -22,7 +22,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"magic" | "password">("magic");
+  const [mode, setMode] = useState<"magic" | "password">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState<null | "magic" | "password" | "google">(null);
@@ -44,9 +44,18 @@ function AuthPage() {
     e.preventDefault();
     if (!email || !password) return;
     setLoading("password");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
     setLoading(null);
-    if (error) return toast.error(error.message);
+    if (error) {
+      const message =
+        error.message === "Invalid login credentials"
+          ? "Email or password doesn't match. If this is your first sign-in, ask an admin to create your account in Supabase."
+          : error.message;
+      return toast.error(message);
+    }
     toast.success("Welcome back.");
     navigate({ to: "/dashboard" });
   }
@@ -82,33 +91,9 @@ function AuthPage() {
           <div className="w-full max-w-sm rounded-2xl border border-foreground/10 bg-card p-6 shadow-sm">
           <Tabs value={mode} onValueChange={(v) => setMode(v as "magic" | "password")}>
             <TabsList className="grid w-full grid-cols-2 mb-5">
-              <TabsTrigger value="magic">Magic link</TabsTrigger>
               <TabsTrigger value="password">Password</TabsTrigger>
+              <TabsTrigger value="magic">Magic link</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="magic">
-              <form onSubmit={handleMagic} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email-magic">Email</Label>
-                  <Input
-                    id="email-magic"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@flowerchildren.world"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  disabled={loading !== null}
-                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                >
-                  {loading === "magic" ? <Loader2 className="size-4 animate-spin" /> : "Send link"}
-                </Button>
-              </form>
-            </TabsContent>
 
             <TabsContent value="password">
               <form onSubmit={handlePassword} className="space-y-4">
@@ -140,6 +125,30 @@ function AuthPage() {
                   className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   {loading === "password" ? <Loader2 className="size-4 animate-spin" /> : "Sign in"}
+                </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="magic">
+              <form onSubmit={handleMagic} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email-magic">Email</Label>
+                  <Input
+                    id="email-magic"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@flowerchildren.world"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading !== null}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  {loading === "magic" ? <Loader2 className="size-4 animate-spin" /> : "Send link"}
                 </Button>
               </form>
             </TabsContent>
