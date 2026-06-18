@@ -1,27 +1,38 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
-import { LayoutDashboard, Users, Sparkles, BarChart3, Sprout, LogOut, Menu } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  Sparkles,
+  BarChart3,
+  Sprout,
+  LogOut,
+  Menu,
+  Settings,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import fcwLogo from "@/assets/fcw-flower.png.asset.json";
 import fcwFullLogo from "@/assets/fcw-full-logo.png.asset.json";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/dashboard", label: "Home", icon: LayoutDashboard },
   { to: "/community", label: "Community", icon: Users },
   { to: "/brand-essence", label: "Brand Essence", icon: Sparkles },
-  { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/garden", label: "The Garden", icon: Sprout },
+  { to: "/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
 const USER = { firstName: "Sukii", role: "Admin" };
 
 function FcwFlowerLogo({ size, alt = "FCW" }: { size: number; alt?: string }) {
   return (
-    <div
-      className="relative shrink-0 overflow-hidden"
+    <Link
+      to="/dashboard"
+      aria-label="Home"
+      className="relative block shrink-0 overflow-hidden rounded-md transition-opacity hover:opacity-80"
       style={{ width: size, height: size }}
     >
       <img
@@ -29,15 +40,13 @@ function FcwFlowerLogo({ size, alt = "FCW" }: { size: number; alt?: string }) {
         alt={alt}
         className="fcw-flower-spin absolute inset-0 h-full w-full object-contain"
       />
-    </div>
+    </Link>
   );
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isMobile = useIsMobile();
-  const menuSide = isMobile ? "bottom" : "right";
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -46,43 +55,35 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
-      <div className="lg:hidden sticky top-0 z-30 flex h-20 items-center justify-between border-b border-black/5 bg-background/90 px-4 sm:px-6 backdrop-blur">
+      <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-black/5 bg-background/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur md:hidden sm:px-6">
         <FcwFlowerLogo size={26} />
         <button
           aria-label="Open menu"
           onClick={() => setMobileOpen(true)}
-          className="rounded-md p-2 hover:bg-black/5"
+          className="rounded-md p-2.5 hover:bg-black/5"
         >
           <Menu className="h-5 w-5" />
         </button>
       </div>
 
       <div className="flex">
-        <aside className="hidden lg:flex h-screen w-64 shrink-0 flex-col border-r border-black/5 bg-background sticky top-0 px-4 py-6">
+        <aside className="sticky top-0 hidden h-[100dvh] w-64 shrink-0 flex-col border-r border-black/5 bg-background px-4 py-6 md:flex">
           <SidebarInner variant="desktop" onNavigate={() => {}} onSignOut={signOut} />
         </aside>
 
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent
-            key={menuSide}
-            side={menuSide}
-            overlayClassName="bg-black/30"
-            className={cn(
-              "lg:hidden flex flex-col gap-0 px-4 py-6",
-              menuSide === "bottom"
-                ? "h-auto max-h-[85vh] overflow-y-auto rounded-t-2xl"
-                : "h-full w-72 max-w-[85%]",
-            )}
+            side="bottom"
+            overlayClassName="bg-black/30 md:hidden"
+            className="flex max-h-[88dvh] flex-col gap-0 overflow-y-auto rounded-t-2xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:hidden"
           >
-            <SidebarInner
-              variant={menuSide === "right" ? "sheet-right" : "sheet-bottom"}
-              onNavigate={() => setMobileOpen(false)}
-              onSignOut={signOut}
-            />
+            <SidebarInner variant="sheet-bottom" onNavigate={() => setMobileOpen(false)} onSignOut={signOut} />
           </SheetContent>
         </Sheet>
 
-        <main className="flex-1 min-w-0 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 lg:px-10 lg:py-10">
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -102,18 +103,15 @@ function SidebarInner({
   const pinUserToBottom = variant === "desktop" || isSheetRight;
 
   return (
-    <div
-      className={cn(
-        "flex min-h-0 flex-col",
-        pinUserToBottom && "h-full",
-      )}
-    >
+    <div className={cn("flex min-h-0 flex-col", pinUserToBottom && "h-full")}>
       <div className="mb-8 flex w-full items-center justify-center px-2">
-        <img
-          src={fcwFullLogo.url}
-          alt="Flower Children World"
-          className="h-auto max-w-[100px] w-auto"
-        />
+        <Link to="/dashboard" onClick={onNavigate} aria-label="Home" className="transition-opacity hover:opacity-80">
+          <img
+            src={fcwFullLogo.url}
+            alt="Flower Children World"
+            className="h-auto max-w-[100px] w-auto"
+          />
+        </Link>
       </div>
 
       <nav className={cn("space-y-1", pinUserToBottom && "flex-1")}>
@@ -139,7 +137,7 @@ function SidebarInner({
         })}
       </nav>
 
-      <div className={cn("border-t border-black/5 pt-4 px-2", pinUserToBottom ? "mt-auto" : "mt-6")}>
+      <div className={cn("border-t border-black/5 px-2 pt-4", pinUserToBottom ? "mt-auto" : "mt-6")}>
         <div className="flex items-center gap-3">
           <Link
             to="/settings"

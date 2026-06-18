@@ -362,7 +362,33 @@ function SettingsPage() {
 
           {admin && (
             <Section label="Team">
-              <div className="overflow-x-auto rounded-2xl border border-black/5 bg-white">
+              <div className="space-y-3 md:hidden">
+                {team.map((member) => (
+                  <div
+                    key={member.id}
+                    className="rounded-2xl border border-black/5 bg-white p-4"
+                  >
+                    <p className="text-sm font-normal">{member.name}</p>
+                    <p className="mt-1 text-xs font-light text-foreground/60">{member.email}</p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-light text-foreground/70">
+                        {member.role} · {member.status}
+                      </span>
+                      {member.email.toLowerCase() !== email.toLowerCase() ? (
+                        <button
+                          type="button"
+                          onClick={() => setRemoveTarget(member)}
+                          className="text-xs text-foreground/50 hover:text-foreground"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto rounded-2xl border border-black/5 bg-white md:block">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
@@ -610,7 +636,7 @@ function IntegrationCard({
       </div>
       {connected ? (
         <div className="mt-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-light text-foreground/70">{accountName}</p>
               {connectedNote ? (
@@ -620,7 +646,7 @@ function IntegrationCard({
             <button
               type="button"
               onClick={onDisconnect}
-              className="shrink-0 text-xs text-foreground/50 hover:text-foreground"
+              className="shrink-0 self-start text-xs text-foreground/50 hover:text-foreground sm:self-auto"
             >
               Disconnect
             </button>

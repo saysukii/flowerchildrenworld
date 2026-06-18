@@ -73,7 +73,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "Flower Children World — Inside" },
       { name: "description", content: "Internal operations portal for Flower Children World." },
       { property: "og:title", content: "Flower Children World — Inside" },
@@ -82,9 +82,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
     ],
     links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Adigiana+Toybox&display=swap" },
       {
         rel: "stylesheet",
         href: appCss,
@@ -118,7 +115,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <GlitterCursorTrail />
       <Outlet />
-      <Toaster position="top-center" />
+      <Toaster position="bottom-center" toastOptions={{ className: "mb-[env(safe-area-inset-bottom,0px)]" }} />
     </QueryClientProvider>
   );
 }

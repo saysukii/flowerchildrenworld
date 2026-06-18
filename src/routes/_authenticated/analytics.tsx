@@ -55,7 +55,7 @@ const GROUPS: Group[] = [
       { label: "Total donated this month", value: "$0", note: "Confirmed charges" },
       { label: "Total donated all-time", value: "$0", note: "Cumulative" },
       { label: "Recurring vs one-time", value: "—", note: "Subscription vs single charge" },
-      { label: "Recent donors", value: "No donors yet", note: "Last 10 · name · amount · date" },
+      { label: "Recent donors", value: "—", note: "Last 10 · name · amount · date" },
     ],
   },
   {

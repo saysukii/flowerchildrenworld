@@ -1,20 +1,18 @@
-import type { GardenTag } from "@/lib/garden";
+-- Reset the three Garden starter notes with fresh FCW content.
+-- Deletes any existing rows with these titles, then re-inserts for the admin user.
 
-export const GARDEN_ADMIN_EMAIL = "info@flowerchildren.world";
+delete from public.garden_notes
+where title in (
+  'Summer 2026 — Programming Ideas',
+  'Fall 2026 — Partner Outreach',
+  'Grant Language — Working Copy'
+);
 
-type SeedNote = {
-  title: string;
-  tag: GardenTag;
-  pinned: boolean;
-  body: string;
-};
-
-export const GARDEN_STARTER_NOTES: SeedNote[] = [
-  {
-    title: "Summer 2026 — Programming Ideas",
-    tag: "Programming",
-    pinned: true,
-    body: `<h1>What are we building this summer? 🌱</h1>
+insert into public.garden_notes (title, body, tag, pinned, created_by)
+select
+  'Summer 2026 — Programming Ideas',
+  $summer$
+<h1>What are we building this summer? 🌱</h1>
 <p>This is our season. Six weeks, full energy, rooted in the mission. Let's make it the best one yet.</p>
 
 <hr>
@@ -88,13 +86,19 @@ export const GARDEN_STARTER_NOTES: SeedNote[] = [
   <li><span style="background-color: #3AB819">Confirm venues by end of June</span></li>
   <li>Do we want a summer theme word? Last year: GROW. This year: ?</li>
   <li><s>Reach out to Eventbrite for promo — switching to Luma now ✓</s></li>
-</ul>`,
-  },
-  {
-    title: "Fall 2026 — Partner Outreach",
-    tag: "Community",
-    pinned: false,
-    body: `<h1>Building the village, one relationship at a time.</h1>
+</ul>
+$summer$,
+  'Programming',
+  true,
+  u.id
+from auth.users u
+where lower(u.email) = lower('info@flowerchildren.world');
+
+insert into public.garden_notes (title, body, tag, pinned, created_by)
+select
+  'Fall 2026 — Partner Outreach',
+  $fall$
+<h1>Building the village, one relationship at a time.</h1>
 <p>Fall is our season for reconnecting and planting new seeds. This note tracks who we want to reach out to, what we're asking for, and where conversations stand.</p>
 
 <hr>
@@ -162,13 +166,19 @@ export const GARDEN_STARTER_NOTES: SeedNote[] = [
 
 <hr>
 
-<blockquote>Partnership works when both sides show up for the children. That's the only criteria that matters.</blockquote>`,
-  },
-  {
-    title: "Grant Language — Working Copy",
-    tag: "Fundraising",
-    pinned: false,
-    body: `<h1>Our story, in our words.</h1>
+<blockquote>Partnership works when both sides show up for the children. That's the only criteria that matters.</blockquote>
+$fall$,
+  'Community',
+  false,
+  u.id
+from auth.users u
+where lower(u.email) = lower('info@flowerchildren.world');
+
+insert into public.garden_notes (title, body, tag, pinned, created_by)
+select
+  'Grant Language — Working Copy',
+  $grant$
+<h1>Our story, in our words.</h1>
 <p>Use this note to draft and refine language for grants, sponsorship decks, and funding applications. Highlight sections that need work. Strike through what's been approved and locked.</p>
 
 <hr>
@@ -222,58 +232,10 @@ export const GARDEN_STARTER_NOTES: SeedNote[] = [
 
 <hr>
 
-<p><span style="color: #C53D3D">⚠ Sections highlighted in yellow need to be updated before submitting. Never submit a draft with placeholders.</span></p>`,
-  },
-];
-
-export async function seedGardenNotesIfEmpty() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-  const { count, error: countError } = await supabaseAdmin
-    .from("garden_notes")
-    .select("id", { count: "exact", head: true });
-
-  if (countError) {
-    console.error("[Garden] Failed to check notes:", countError.message);
-    return { seeded: false as const, reason: "count_failed" as const };
-  }
-
-  if (count && count > 0) {
-    return { seeded: false as const, reason: "not_empty" as const };
-  }
-
-  const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
-    perPage: 1000,
-  });
-
-  if (listError) {
-    console.error("[Garden] Failed to list users:", listError.message);
-    return { seeded: false as const, reason: "admin_lookup_failed" as const };
-  }
-
-  const admin = listData.users.find(
-    (u) => u.email?.toLowerCase() === GARDEN_ADMIN_EMAIL.toLowerCase(),
-  );
-
-  if (!admin?.id) {
-    console.error(`[Garden] Admin user not found: ${GARDEN_ADMIN_EMAIL}`);
-    return { seeded: false as const, reason: "admin_not_found" as const };
-  }
-
-  const rows = GARDEN_STARTER_NOTES.map((note) => ({
-    title: note.title,
-    body: note.body,
-    tag: note.tag,
-    pinned: note.pinned,
-    created_by: admin.id,
-  }));
-
-  const { error: insertError } = await supabaseAdmin.from("garden_notes").insert(rows);
-
-  if (insertError) {
-    console.error("[Garden] Failed to seed notes:", insertError.message);
-    return { seeded: false as const, reason: "insert_failed" as const };
-  }
-
-  return { seeded: true as const };
-}
+<p><span style="color: #C53D3D">⚠ Sections highlighted in yellow need to be updated before submitting. Never submit a draft with placeholders.</span></p>
+$grant$,
+  'Fundraising',
+  false,
+  u.id
+from auth.users u
+where lower(u.email) = lower('info@flowerchildren.world');

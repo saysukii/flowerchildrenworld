@@ -7,6 +7,7 @@ export type ChildRecord = {
   program: string;
   status: string;
   enrollmentDate: string;
+  guardianId: string;
   guardianLink: string;
   notes: string;
 };
@@ -73,7 +74,7 @@ export const COMMUNITY_CSV_FIELDS: Record<CommunityTab, CsvFieldDef[]> = {
     { key: "program", label: "Program", aliases: ["program type"] },
     { key: "status", label: "Status", aliases: [] },
     { key: "enrollmentDate", label: "Enrollment date", aliases: ["enrolled", "enrollment", "enroll date"] },
-    { key: "guardianLink", label: "Guardian link", aliases: ["guardian", "linked guardian", "parent"] },
+    { key: "guardianLink", label: "Guardian", aliases: ["guardian", "guardian link", "linked guardian", "parent"] },
     { key: "notes", label: "Notes", aliases: ["note", "comments"] },
   ],
   guardians: [
@@ -120,10 +121,6 @@ export const COMMUNITY_CSV_FIELDS: Record<CommunityTab, CsvFieldDef[]> = {
   ],
 };
 
-export function csvTemplateHeaders(tab: CommunityTab): string[] {
-  return COMMUNITY_CSV_FIELDS[tab].map((f) => f.label);
-}
-
 export function loadCommunityStore(): CommunityStore {
   if (typeof window === "undefined") return EMPTY_STORE;
   try {
@@ -131,7 +128,12 @@ export function loadCommunityStore(): CommunityStore {
     if (!raw) return EMPTY_STORE;
     const parsed = JSON.parse(raw) as Partial<CommunityStore>;
     return {
-      children: Array.isArray(parsed.children) ? parsed.children : [],
+      children: Array.isArray(parsed.children)
+        ? parsed.children.map((child) => ({
+            ...child,
+            guardianId: child.guardianId ?? "",
+          }))
+        : [],
       guardians: Array.isArray(parsed.guardians) ? parsed.guardians : [],
       volunteers: Array.isArray(parsed.volunteers) ? parsed.volunteers : [],
       partners: Array.isArray(parsed.partners) ? parsed.partners : [],
@@ -288,6 +290,7 @@ export function rowsToRecords(tab: CommunityTab, rows: Record<string, string>[])
             program: row.program?.trim() || "Full-Time",
             status: row.status?.trim() || "Active",
             enrollmentDate: row.enrollmentDate?.trim() ?? "",
+            guardianId: row.guardianId?.trim() ?? "",
             guardianLink: row.guardianLink?.trim() ?? "",
             notes: row.notes?.trim() ?? "",
           }),
@@ -339,16 +342,41 @@ export function rowsToRecords(tab: CommunityTab, rows: Record<string, string>[])
   }
 }
 
-export function downloadCsvTemplate(tab: CommunityTab) {
-  const headers = csvTemplateHeaders(tab);
-  const csv = `${headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(",")}\n`;
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `fcw-${tab}-template.csv`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+export function appendLinkedChild(existing: string, childName: string) {
+  const names = existing
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+  if (names.some((name) => name.toLowerCase() === childName.toLowerCase())) return existing;
+  return [...names, childName].join(", ");
+}
+
+export function saveChildWithGuardian(
+  store: CommunityStore,
+  child: ChildRecord,
+  guardian: GuardianRecord,
+  isNewGuardian: boolean,
+): CommunityStore {
+  const linkedChild: ChildRecord = {
+    ...child,
+    guardianId: guardian.id,
+    guardianLink: guardian.guardianName,
+  };
+
+  const updatedGuardian: GuardianRecord = {
+    ...guardian,
+    linkedChildren: appendLinkedChild(guardian.linkedChildren, child.fullName),
+  };
+
+  const guardians = isNewGuardian
+    ? [...store.guardians, updatedGuardian]
+    : store.guardians.map((g) => (g.id === guardian.id ? updatedGuardian : g));
+
+  return {
+    ...store,
+    children: [...store.children, linkedChild],
+    guardians,
+  };
 }
 
 export function formatChildRow(child: ChildRecord) {

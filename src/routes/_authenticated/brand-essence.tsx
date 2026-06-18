@@ -1,7 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Upload } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { UploadAssetDialog } from "@/components/brand-essence/upload-asset-dialog";
+import { ColorPaletteCard } from "@/components/brand-essence/color-palette-card";
+import { MissionCard } from "@/components/brand-essence/mission-card";
+import { TypographyCard } from "@/components/brand-essence/typography-card";
+import { supabase } from "@/integrations/supabase/client";
+import { isAdmin } from "@/lib/user-role";
+import {
+  filterBrandAssets,
+  isImageAsset,
+  isPdfAsset,
+  loadBrandAssets,
+  type BrandAsset,
+  type BrandAssetCategory,
+} from "@/lib/brand-assets";
 
 export const Route = createFileRoute("/_authenticated/brand-essence")({
   head: () => ({
@@ -13,7 +27,7 @@ export const Route = createFileRoute("/_authenticated/brand-essence")({
   component: BrandEssencePage,
 });
 
-type Category = "all" | "logos" | "colors" | "typography" | "templates" | "copy" | "documents";
+type Category = "all" | BrandAssetCategory;
 
 const TABS: { key: Category; label: string }[] = [
   { key: "all", label: "All" },
@@ -25,33 +39,23 @@ const TABS: { key: Category; label: string }[] = [
   { key: "documents", label: "Documents" },
 ];
 
-const COLORS = [
-  { hex: "#FCFCFC", name: "White", usage: "Backgrounds" },
-  { hex: "#020202", name: "Black", usage: "Primary text" },
-  { hex: "#59341E", name: "Brown", usage: "Earth · warmth" },
-  { hex: "#3AB819", name: "Green", usage: "Nature · growth" },
-  { hex: "#15AAD2", name: "Blue", usage: "Sky · calm" },
-  { hex: "#776BD9", name: "Purple", usage: "Creativity" },
-  { hex: "#EFB003", name: "Yellow", usage: "Joy · warmth" },
-  { hex: "#D9580D", name: "Orange", usage: "Energy" },
-  { hex: "#C53D3D", name: "Red", usage: "Passion" },
-];
-
-const CALM = [
-  { letter: "C", word: "Community" },
-  { letter: "A", word: "Arts" },
-  { letter: "L", word: "Life Skills" },
-  { letter: "M", word: "Mindfulness" },
-];
-
 function BrandEssencePage() {
   const [tab, setTab] = useState<Category>("all");
+  const [assets, setAssets] = useState<BrandAsset[]>([]);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [admin, setAdmin] = useState(false);
   const active = useMemo(() => TABS.find((t) => t.key === tab)!, [tab]);
+  const visibleAssets = useMemo(() => filterBrandAssets(assets, tab), [assets, tab]);
+  const uploadCategory: BrandAssetCategory = tab === "all" ? "logos" : tab;
+
+  useEffect(() => {
+    setAssets(loadBrandAssets());
+    void supabase.auth.getUser().then(({ data }) => setAdmin(isAdmin(data.user)));
+  }, []);
 
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl">
-        {/* Header */}
         <header className="mb-6 sm:mb-8">
           <span className="font-label text-[11px] text-foreground/50">Brand Essence</span>
           <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">Everything that makes us, us.</h1>
@@ -60,7 +64,6 @@ function BrandEssencePage() {
           </p>
         </header>
 
-        {/* Tabs + upload */}
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="-mx-4 sm:mx-0 overflow-x-auto">
             <div className="flex gap-2 px-4 sm:px-0 min-w-max">
@@ -84,86 +87,84 @@ function BrandEssencePage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-normal text-white transition-opacity hover:opacity-90"
-            style={{ background: "#3AB819" }}
-          >
-            <Upload className="h-4 w-4" />
-            Upload asset
-          </button>
+          {admin ? (
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-normal text-white transition-opacity hover:opacity-90"
+              style={{ background: "#3AB819" }}
+            >
+              <Upload className="h-4 w-4" />
+              Upload asset
+            </button>
+          ) : null}
         </div>
 
-        {/* Asset grid empty state */}
-        <section className="rounded-3xl border border-black/5 bg-white px-6 py-16 text-center mb-8">
-          <p className="text-sm text-foreground/50">
-            Nothing here yet — upload your first {active.key === "all" ? "asset" : active.label.toLowerCase()} and build the vault.
-          </p>
-        </section>
-
-        {/* Reference cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Color Palette */}
-          <ReferenceCard title="Color Palette">
-            <div className="grid grid-cols-3 gap-3">
-              {COLORS.map((c) => (
-                <div key={c.hex} className="flex flex-col">
-                  <div
-                    className="aspect-square w-full rounded-xl border border-black/5"
-                    style={{ background: c.hex }}
-                  />
-                  <p className="mt-2 text-xs font-normal">{c.name}</p>
-                  <p className="text-[10px] font-light uppercase tracking-wider text-foreground/40">{c.hex}</p>
-                  <p className="text-[11px] font-light text-foreground/60 leading-snug">{c.usage}</p>
-                </div>
+        <section className="rounded-3xl border border-black/5 bg-white px-6 py-8 mb-8">
+          {visibleAssets.length === 0 ? (
+            <p className="py-8 text-center text-sm text-foreground/50">
+              {admin
+                ? `Nothing here yet — upload your first ${active.key === "all" ? "asset" : active.label.toLowerCase()} and build the vault.`
+                : `No ${active.key === "all" ? "assets" : active.label.toLowerCase()} yet.`}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {visibleAssets.map((asset) => (
+                <AssetCard key={asset.id} asset={asset} />
               ))}
             </div>
-          </ReferenceCard>
+          )}
+        </section>
 
-          {/* Typography */}
-          <ReferenceCard title="Typography">
-            <div className="space-y-5">
-              <div>
-                <p className="text-2xl font-normal leading-tight">Nohemi Regular</p>
-                <p className="mt-1 text-xs font-light text-foreground/60">Headers</p>
-              </div>
-              <div>
-                <p className="text-2xl font-light leading-tight">Nohemi Light</p>
-                <p className="mt-1 text-xs font-light text-foreground/60">Body</p>
-              </div>
-              <div>
-                <p className="font-label text-xl text-foreground">Adigiana Toybox</p>
-                <p className="mt-1 text-xs font-light text-foreground/60">Labels + playful accents</p>
-              </div>
-            </div>
-          </ReferenceCard>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <ColorPaletteCard admin={admin} />
 
-          {/* Mission + CALM */}
-          <ReferenceCard title="Mission">
-            <p className="text-sm font-light leading-relaxed text-foreground/80">
-              Children are the seeds of the future. Rooted in values of love and creative freedom, we empower the
-              flower children to become the greatest versions of themselves.
-            </p>
-            <div className="mt-6">
-              <span className="font-label text-[11px] text-foreground/50">C.A.L.M.</span>
-              <ul className="mt-3 space-y-2">
-                {CALM.map((c) => (
-                  <li key={c.letter} className="flex items-baseline gap-3">
-                    <span
-                      className="text-lg font-normal"
-                      style={{ color: "#3AB819" }}
-                    >
-                      {c.letter}
-                    </span>
-                    <span className="text-sm font-light text-foreground/80">{c.word}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </ReferenceCard>
+          <TypographyCard />
+
+          <MissionCard admin={admin} />
         </div>
       </div>
+
+      {admin ? (
+        <UploadAssetDialog
+          open={uploadOpen}
+          onOpenChange={setUploadOpen}
+          defaultCategory={uploadCategory}
+          onUploaded={(asset) => setAssets((prev) => [asset, ...prev])}
+        />
+      ) : null}
     </AppShell>
+  );
+}
+
+function AssetCard({ asset }: { asset: BrandAsset }) {
+  return (
+    <article className="overflow-hidden rounded-2xl border border-black/5 bg-[#FCFCFC]">
+      <div className="flex aspect-[4/3] items-center justify-center bg-white p-4">
+        {isImageAsset(asset) ? (
+          <img src={asset.dataUrl} alt={asset.name} className="max-h-full max-w-full object-contain" />
+        ) : isPdfAsset(asset) ? (
+          <div className="text-center">
+            <p className="text-sm font-normal">PDF</p>
+            <p className="mt-1 text-xs text-foreground/50">Preview in vault</p>
+          </div>
+        ) : (
+          <div className="text-center">
+            <p className="text-sm font-normal">File</p>
+            <p className="mt-1 text-xs text-foreground/50">{asset.mimeType}</p>
+          </div>
+        )}
+      </div>
+      <div className="px-4 py-3">
+        <p className="truncate text-sm font-light">{asset.name}</p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="font-label text-[10px] text-foreground/50">{asset.category}</span>
+          <span className="text-[10px] text-foreground/40">
+            {asset.source === "drive" ? "Google Drive" : "Uploaded"}
+          </span>
+        </div>
+      </div>
+    </article>
   );
 }
 

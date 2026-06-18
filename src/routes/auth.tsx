@@ -72,7 +72,7 @@ function AuthPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen w-full items-center justify-center bg-background px-5">
+    <main className="relative flex min-h-[100dvh] w-full items-center justify-center bg-background px-5 pb-8 pt-28 sm:pt-32">
       <div className="absolute inset-x-0 top-6 flex justify-center sm:top-8">
         <img
           src={fcwLogo.url}
@@ -82,7 +82,7 @@ function AuthPage() {
       </div>
 
       <div className="flex w-full max-w-lg flex-col items-center gap-4">
-          <p className="whitespace-nowrap text-center text-xs font-light text-foreground/60">
+          <p className="max-w-xs px-2 text-center text-xs font-light text-foreground/60 text-balance sm:max-w-sm">
             Welcome in. A private space — for the hands that build the village.
           </p>
 

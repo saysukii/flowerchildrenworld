@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Search, ChevronDown, X, Upload } from "lucide-react";
+import { Plus, Search, ChevronDown, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { CsvImportDialog } from "@/components/community/csv-import-dialog";
 import { SheetsImportButton, SheetsImportDialog } from "@/components/community/sheets-import-dialog";
 import {
   type ChildRecord,
@@ -18,6 +17,7 @@ import {
   formatPartnerRow,
   formatVolunteerRow,
   loadCommunityStore,
+  saveChildWithGuardian,
   saveCommunityStore,
 } from "@/lib/community";
 import { loadIntegrations } from "@/lib/integrations-config";
@@ -78,11 +78,32 @@ const TABS: TabConfig[] = [
   },
 ];
 
+function MobileRecordCard({
+  title,
+  lines,
+}: {
+  title: string;
+  lines: { label: string; value: string }[];
+}) {
+  return (
+    <div className="px-4 py-4">
+      <p className="text-sm font-normal">{title}</p>
+      <dl className="mt-2 space-y-1">
+        {lines.map((line) => (
+          <div key={line.label} className="flex gap-2 text-xs font-light">
+            <dt className="w-20 shrink-0 text-foreground/45">{line.label}</dt>
+            <dd className="text-foreground/70">{line.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 function CommunityPage() {
   const [tab, setTab] = useState<TabKey>("children");
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const [sheetsImportOpen, setSheetsImportOpen] = useState(false);
   const [defaultSpreadsheetId, setDefaultSpreadsheetId] = useState("");
   const [store, setStore] = useState<CommunityStore>({
@@ -140,6 +161,38 @@ function CommunityPage() {
     persist(appendRecordsForTab(store, tab, [record]));
   }
 
+  function handleSaveChild(
+    child: Omit<ChildRecord, "id">,
+    guardian:
+      | { mode: "existing"; guardianId: string }
+      | { mode: "new"; guardian: Omit<GuardianRecord, "id" | "linkedChildren"> }
+      | null,
+  ) {
+    const childRecord: ChildRecord = { id: crypto.randomUUID(), ...child };
+
+    if (!guardian) {
+      persist(appendRecordsForTab(store, "children", [childRecord]));
+      return;
+    }
+
+    if (guardian.mode === "existing") {
+      const existing = store.guardians.find((g) => g.id === guardian.guardianId);
+      if (!existing) {
+        persist(appendRecordsForTab(store, "children", [childRecord]));
+        return;
+      }
+      persist(saveChildWithGuardian(store, childRecord, existing, false));
+      return;
+    }
+
+    const newGuardian: GuardianRecord = {
+      id: crypto.randomUUID(),
+      ...guardian.guardian,
+      linkedChildren: "",
+    };
+    persist(saveChildWithGuardian(store, childRecord, newGuardian, true));
+  }
+
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl">
@@ -185,7 +238,7 @@ function CommunityPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={active.searchPlaceholder}
-                className="w-full rounded-full border border-black/10 bg-white py-2.5 pl-9 pr-3 text-sm font-light placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
+                className="w-full rounded-full border border-black/10 bg-white py-2.5 pl-9 pr-3 text-base font-light placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none md:text-sm"
               />
             </div>
             <button
@@ -200,14 +253,6 @@ function CommunityPage() {
           <div className="flex flex-col gap-2 sm:flex-row">
             <SheetsImportButton onClick={() => setSheetsImportOpen(true)} />
             <button
-              type="button"
-              onClick={() => setImportOpen(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-light text-foreground/80 transition-colors hover:bg-black/5"
-            >
-              <Upload className="h-4 w-4" />
-              Upload CSV
-            </button>
-            <button
               onClick={() => setAddOpen(true)}
               className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-normal text-white transition-opacity hover:opacity-90"
               style={{ background: "#3AB819" }}
@@ -218,10 +263,80 @@ function CommunityPage() {
           </div>
         </div>
 
-        {/* Table */}
+        {/* Records */}
         <section className="overflow-hidden rounded-3xl border border-black/5 bg-white">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+          <div className="md:hidden divide-y divide-black/5">
+            {!ready ? (
+              <p className="px-4 py-16 text-center text-sm text-foreground/50">Loading…</p>
+            ) : tab === "children" && filteredChildren.length > 0 ? (
+              filteredChildren.map((child) => {
+                const row = formatChildRow(child);
+                return (
+                  <MobileRecordCard
+                    key={child.id}
+                    title={row.name}
+                    lines={[
+                      { label: "Program", value: row.program },
+                      { label: "Status", value: row.status },
+                      { label: "DOB", value: row.dob || "—" },
+                    ]}
+                  />
+                );
+              })
+            ) : tab === "guardians" && filteredGuardians.length > 0 ? (
+              filteredGuardians.map((guardian) => {
+                const row = formatGuardianRow(guardian);
+                return (
+                  <MobileRecordCard
+                    key={guardian.id}
+                    title={row.name}
+                    lines={[
+                      { label: "Email", value: row.email || "—" },
+                      { label: "Phone", value: row.phone || "—" },
+                      { label: "Children", value: row.linkedChildren || "—" },
+                    ]}
+                  />
+                );
+              })
+            ) : tab === "volunteers" && filteredVolunteers.length > 0 ? (
+              filteredVolunteers.map((volunteer) => {
+                const row = formatVolunteerRow(volunteer);
+                return (
+                  <MobileRecordCard
+                    key={volunteer.id}
+                    title={row.name}
+                    lines={[
+                      { label: "Email", value: row.email || "—" },
+                      { label: "Phone", value: row.phone || "—" },
+                      { label: "Skills", value: row.skills || "—" },
+                      { label: "Status", value: row.status },
+                    ]}
+                  />
+                );
+              })
+            ) : tab === "partners" && filteredPartners.length > 0 ? (
+              filteredPartners.map((partner) => {
+                const row = formatPartnerRow(partner);
+                return (
+                  <MobileRecordCard
+                    key={partner.id}
+                    title={row.name}
+                    lines={[
+                      { label: "Organization", value: row.organization },
+                      { label: "Email", value: row.email || "—" },
+                      { label: "Type", value: row.partnershipType },
+                      { label: "Status", value: row.status },
+                    ]}
+                  />
+                );
+              })
+            ) : (
+              <p className="px-4 py-16 text-center text-sm text-foreground/50">{active.emptyState}</p>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-black/5 text-xs font-light uppercase tracking-wider text-foreground/50">
                   {active.columns.map((col) => (
@@ -305,14 +420,6 @@ function CommunityPage() {
         </section>
       </div>
 
-      <CsvImportDialog
-        tab={tab}
-        tabLabel={active.label}
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        onImport={handleImport}
-      />
-
       <SheetsImportDialog
         tab={tab}
         tabLabel={active.label}
@@ -323,7 +430,13 @@ function CommunityPage() {
       />
 
       {addOpen && (
-        <AddRecordDrawer tab={active} onClose={() => setAddOpen(false)} onSave={handleSaveRecord} />
+        <AddRecordDrawer
+          tab={active}
+          guardians={store.guardians}
+          onClose={() => setAddOpen(false)}
+          onSave={handleSaveRecord}
+          onSaveChild={handleSaveChild}
+        />
       )}
     </AppShell>
   );
@@ -331,12 +444,22 @@ function CommunityPage() {
 
 function AddRecordDrawer({
   tab,
+  guardians,
   onClose,
   onSave,
+  onSaveChild,
 }: {
   tab: TabConfig;
+  guardians: GuardianRecord[];
   onClose: () => void;
   onSave: (record: ChildRecord | GuardianRecord | VolunteerRecord | PartnerRecord) => void;
+  onSaveChild: (
+    child: Omit<ChildRecord, "id">,
+    guardian:
+      | { mode: "existing"; guardianId: string }
+      | { mode: "new"; guardian: Omit<GuardianRecord, "id" | "linkedChildren"> }
+      | null,
+  ) => void;
 }) {
   const [childForm, setChildForm] = useState({
     fullName: "",
@@ -344,8 +467,20 @@ function AddRecordDrawer({
     program: "Full-Time",
     status: "Active",
     enrollmentDate: "",
+    guardianId: "",
     guardianLink: "",
     notes: "",
+  });
+  const [guardianMode, setGuardianMode] = useState<"existing" | "new">(
+    guardians.length > 0 ? "existing" : "new",
+  );
+  const [selectedGuardianId, setSelectedGuardianId] = useState("");
+  const [newGuardianForm, setNewGuardianForm] = useState({
+    guardianName: "",
+    email: "",
+    phone: "",
+    emergencyContactName: "",
+    emergencyContactPhone: "",
   });
   const [guardianForm, setGuardianForm] = useState({
     guardianName: "",
@@ -379,7 +514,30 @@ function AddRecordDrawer({
     const id = crypto.randomUUID();
     if (tab.key === "children") {
       if (!childForm.fullName.trim()) return;
-      onSave({ id, ...childForm, fullName: childForm.fullName.trim() });
+
+      const child = {
+        ...childForm,
+        fullName: childForm.fullName.trim(),
+        guardianId: "",
+        guardianLink: "",
+      };
+
+      if (guardianMode === "existing" && selectedGuardianId) {
+        onSaveChild(child, { mode: "existing", guardianId: selectedGuardianId });
+      } else if (guardianMode === "new" && newGuardianForm.guardianName.trim()) {
+        onSaveChild(child, {
+          mode: "new",
+          guardian: {
+            guardianName: newGuardianForm.guardianName.trim(),
+            email: newGuardianForm.email.trim(),
+            phone: newGuardianForm.phone.trim(),
+            emergencyContactName: newGuardianForm.emergencyContactName.trim(),
+            emergencyContactPhone: newGuardianForm.emergencyContactPhone.trim(),
+          },
+        });
+      } else {
+        onSaveChild(child, null);
+      }
     } else if (tab.key === "guardians") {
       if (!guardianForm.guardianName.trim()) return;
       onSave({ id, ...guardianForm, guardianName: guardianForm.guardianName.trim() });
@@ -394,10 +552,10 @@ function AddRecordDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-stretch">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <aside className="relative ml-auto flex h-full w-full max-w-md flex-col bg-background shadow-xl">
-        <header className="flex items-center justify-between border-b border-black/5 px-6 py-4">
+      <aside className="relative flex max-h-[100dvh] w-full flex-col rounded-t-3xl bg-background shadow-xl sm:ml-auto sm:h-full sm:max-w-md sm:rounded-none">
+        <header className="flex items-center justify-between border-b border-black/5 px-4 py-4 sm:px-6">
           <h2 className="text-lg font-normal">{tab.addLabel}</h2>
           <button
             aria-label="Close"
@@ -408,9 +566,20 @@ function AddRecordDrawer({
           </button>
         </header>
 
-        <form id="community-add-form" className="flex-1 overflow-y-auto px-6 py-5 space-y-4" onSubmit={handleSubmit}>
+        <form id="community-add-form" className="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6" onSubmit={handleSubmit}>
           {tab.key === "children" && (
-            <ChildrenFields values={childForm} onChange={setChildForm} />
+            <>
+              <ChildrenFields values={childForm} onChange={setChildForm} />
+              <GuardianPicker
+                guardians={guardians}
+                mode={guardianMode}
+                onModeChange={setGuardianMode}
+                selectedGuardianId={selectedGuardianId}
+                onSelectGuardian={setSelectedGuardianId}
+                newGuardian={newGuardianForm}
+                onNewGuardianChange={setNewGuardianForm}
+              />
+            </>
           )}
           {tab.key === "guardians" && (
             <GuardianFields values={guardianForm} onChange={setGuardianForm} />
@@ -423,7 +592,7 @@ function AddRecordDrawer({
           )}
         </form>
 
-        <footer className="flex justify-end gap-2 border-t border-black/5 px-6 py-4">
+        <footer className="sticky bottom-0 flex justify-end gap-2 border-t border-black/5 bg-background px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
           <button
             type="button"
             onClick={onClose}
@@ -455,7 +624,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputCls =
-  "w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-light placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none";
+  "w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-base font-light placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none md:py-2 md:text-sm";
 
 function ChildrenFields({
   values,
@@ -511,14 +680,6 @@ function ChildrenFields({
           onChange={(e) => onChange({ ...values, enrollmentDate: e.target.value })}
         />
       </Field>
-      <Field label="Guardian link">
-        <input
-          className={inputCls}
-          value={values.guardianLink}
-          onChange={(e) => onChange({ ...values, guardianLink: e.target.value })}
-          placeholder="Guardian name"
-        />
-      </Field>
       <Field label="Notes">
         <textarea
           rows={3}
@@ -528,6 +689,104 @@ function ChildrenFields({
         />
       </Field>
     </>
+  );
+}
+
+function GuardianPicker({
+  guardians,
+  mode,
+  onModeChange,
+  selectedGuardianId,
+  onSelectGuardian,
+  newGuardian,
+  onNewGuardianChange,
+}: {
+  guardians: GuardianRecord[];
+  mode: "existing" | "new";
+  onModeChange: (mode: "existing" | "new") => void;
+  selectedGuardianId: string;
+  onSelectGuardian: (id: string) => void;
+  newGuardian: Omit<GuardianRecord, "id" | "linkedChildren">;
+  onNewGuardianChange: (next: Omit<GuardianRecord, "id" | "linkedChildren">) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-2xl border border-black/5 bg-[#FCFCFC] px-4 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-light text-foreground/60">Guardian</span>
+        <div className="flex gap-1 rounded-full bg-white p-1 border border-black/5">
+          <button
+            type="button"
+            onClick={() => onModeChange("existing")}
+            disabled={guardians.length === 0}
+            className={[
+              "rounded-full px-3 py-1 text-xs font-light transition-colors",
+              mode === "existing" ? "bg-foreground text-background" : "text-foreground/60 hover:text-foreground",
+              guardians.length === 0 ? "opacity-40 cursor-not-allowed" : "",
+            ].join(" ")}
+          >
+            Select existing
+          </button>
+          <button
+            type="button"
+            onClick={() => onModeChange("new")}
+            className={[
+              "rounded-full px-3 py-1 text-xs font-light transition-colors",
+              mode === "new" ? "bg-foreground text-background" : "text-foreground/60 hover:text-foreground",
+            ].join(" ")}
+          >
+            Create new
+          </button>
+        </div>
+      </div>
+
+      {mode === "existing" ? (
+        guardians.length === 0 ? (
+          <p className="text-sm font-light text-foreground/50">
+            No guardians yet — switch to Create new.
+          </p>
+        ) : (
+          <select
+            className={inputCls}
+            value={selectedGuardianId}
+            onChange={(e) => onSelectGuardian(e.target.value)}
+          >
+            <option value="">Choose a guardian…</option>
+            {guardians.map((guardian) => (
+              <option key={guardian.id} value={guardian.id}>
+                {guardian.guardianName}
+                {guardian.email ? ` · ${guardian.email}` : ""}
+              </option>
+            ))}
+          </select>
+        )
+      ) : (
+        <div className="space-y-3">
+          <Field label="Guardian name">
+            <input
+              className={inputCls}
+              value={newGuardian.guardianName}
+              onChange={(e) => onNewGuardianChange({ ...newGuardian, guardianName: e.target.value })}
+            />
+          </Field>
+          <Field label="Email">
+            <input
+              type="email"
+              className={inputCls}
+              value={newGuardian.email}
+              onChange={(e) => onNewGuardianChange({ ...newGuardian, email: e.target.value })}
+            />
+          </Field>
+          <Field label="Phone">
+            <input
+              type="tel"
+              className={inputCls}
+              value={newGuardian.phone}
+              onChange={(e) => onNewGuardianChange({ ...newGuardian, phone: e.target.value })}
+            />
+          </Field>
+        </div>
+      )}
+    </div>
   );
 }
 

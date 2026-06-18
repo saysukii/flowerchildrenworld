@@ -1,24 +1,12 @@
-import { Loader2, Pin, Plus, Search, Trash2 } from "lucide-react";
+import { Loader2, Plus, Star } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { NoteEditorPanel } from "@/components/garden/note-editor-panel";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  GARDEN_GREEN,
-  GARDEN_TAG_COLORS,
   GARDEN_TAGS,
   type GardenNote,
   type GardenTag,
-  formatNoteDate,
+  formatNoteCardDate,
+  noteCardColors,
   notePreviewLines,
   sortGardenNotes,
   stripHtml,
@@ -28,18 +16,18 @@ import { cn } from "@/lib/utils";
 
 type NotesTabProps = {
   userId: string;
+  query: string;
+  refreshKey?: number;
+  savedNote?: GardenNote | null;
+  onOpenNote: (note: GardenNote | null) => void;
 };
 
 type TagFilter = "All" | GardenTag;
 
-export function NotesTab({ userId }: NotesTabProps) {
+export function NotesTab({ userId, query, refreshKey = 0, savedNote, onOpenNote }: NotesTabProps) {
   const [notes, setNotes] = useState<GardenNote[]>([]);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<TagFilter>("All");
-  const [editorNote, setEditorNote] = useState<GardenNote | null | undefined>(undefined);
-  const [deleteTarget, setDeleteTarget] = useState<GardenNote | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const loadNotes = useCallback(async () => {
     const { data, error } = await supabase
@@ -59,7 +47,17 @@ export function NotesTab({ userId }: NotesTabProps) {
 
   useEffect(() => {
     void loadNotes();
-  }, [loadNotes]);
+  }, [loadNotes, refreshKey]);
+
+  useEffect(() => {
+    if (!savedNote) return;
+    setNotes((prev) => {
+      const next = prev.some((n) => n.id === savedNote.id)
+        ? prev.map((n) => (n.id === savedNote.id ? savedNote : n))
+        : [savedNote, ...prev];
+      return sortGardenNotes(next);
+    });
+  }, [savedNote]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -75,163 +73,84 @@ export function NotesTab({ userId }: NotesTabProps) {
 
   async function togglePin(note: GardenNote, e: React.MouseEvent) {
     e.stopPropagation();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("garden_notes")
       .update({ pinned: !note.pinned })
       .eq("id", note.id)
-      .eq("created_by", userId);
+      .eq("created_by", userId)
+      .select()
+      .single();
 
     if (error) return toast.error(error.message);
     setNotes((prev) =>
-      sortGardenNotes(
-        prev.map((n) => (n.id === note.id ? { ...n, pinned: !n.pinned } : n)),
-      ),
+      sortGardenNotes(prev.map((n) => (n.id === note.id ? (data as GardenNote) : n))),
     );
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    const { error } = await supabase
-      .from("garden_notes")
-      .delete()
-      .eq("id", deleteTarget.id)
-      .eq("created_by", userId);
-
-    setDeleting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    setNotes((prev) => prev.filter((n) => n.id !== deleteTarget.id));
-    setDeleteTarget(null);
-    toast.success("Note deleted.");
-  }
-
-  function handleSaved(saved: GardenNote) {
-    setNotes((prev) => {
-      const exists = prev.some((n) => n.id === saved.id);
-      if (exists) return sortGardenNotes(prev.map((n) => (n.id === saved.id ? saved : n)));
-      return sortGardenNotes([saved, ...prev]);
-    });
-    setEditorNote((current) => (current === undefined ? undefined : saved));
   }
 
   const tagFilters: TagFilter[] = ["All", ...GARDEN_TAGS];
 
   return (
     <>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 sm:max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search your notes..."
-            className="w-full rounded-full border border-black/10 bg-white py-2.5 pl-9 pr-3 text-sm font-light placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setEditorNote(null)}
-          className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-normal text-white transition-opacity hover:opacity-90"
-          style={{ background: GARDEN_GREEN }}
-        >
-          <Plus className="h-4 w-4" />
-          New note
-        </button>
-      </div>
-
-      <div className="-mx-4 sm:mx-0 mb-6 overflow-x-auto">
-        <div className="flex gap-2 px-4 sm:px-0 min-w-max">
-          {tagFilters.map((t) => {
-            const active = tagFilter === t;
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTagFilter(t)}
-                className={cn(
-                  "rounded-full px-4 py-2 text-sm font-light transition-colors whitespace-nowrap",
-                  active
-                    ? "bg-foreground text-background"
-                    : "text-foreground/70 hover:bg-black/5",
-                )}
-              >
-                {t}
-              </button>
-            );
-          })}
-        </div>
+      <div className="-mx-4 mb-5 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:mb-6 sm:px-0">
+        {tagFilters.map((t) => {
+          const active = tagFilter === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTagFilter(t)}
+              className={cn(
+                "shrink-0 rounded-full px-3.5 py-1.5 text-sm font-light transition-colors whitespace-nowrap",
+                active
+                  ? "bg-foreground text-background"
+                  : "text-foreground/60 hover:bg-black/5 hover:text-foreground",
+              )}
+            >
+              {t}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
+        <div className="flex justify-center py-24">
           <Loader2 className="h-6 w-6 animate-spin text-foreground/40" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-3xl border border-black/5 bg-white px-6 py-16 text-center">
-          <p className="text-sm text-foreground/50">Nothing planted yet. Start with a thought.</p>
+        <div className="rounded-3xl bg-black/[0.03] px-6 py-20 text-center">
+          <p className="text-sm font-light text-foreground/50">Nothing planted yet. Start with a thought.</p>
           <button
             type="button"
-            onClick={() => setEditorNote(null)}
-            className="mt-6 inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-normal text-white transition-opacity hover:opacity-90"
-            style={{ background: GARDEN_GREEN }}
+            onClick={() => onOpenNote(null)}
+            className="mt-8 inline-flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform hover:scale-105"
+            aria-label="New note"
           >
-            <Plus className="h-4 w-4" />
-            New note
+            <Plus className="h-5 w-5" />
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-3 sm:gap-4">
           {filtered.map((note) => (
             <NoteCard
               key={note.id}
               note={note}
-              onOpen={() => setEditorNote(note)}
+              onOpen={() => onOpenNote(note)}
               onPin={(e) => void togglePin(note, e)}
-              onDelete={(e) => {
-                e.stopPropagation();
-                setDeleteTarget(note);
-              }}
             />
           ))}
         </div>
       )}
 
-      {editorNote !== undefined && (
-        <NoteEditorPanel
-          note={editorNote}
-          userId={userId}
-          onClose={() => setEditorNote(undefined)}
-          onSaved={handleSaved}
-        />
-      )}
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-normal">Delete this note?</AlertDialogTitle>
-            <AlertDialogDescription>
-              &ldquo;{deleteTarget?.title || "Untitled"}&rdquo; will be removed permanently.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void confirmDelete();
-              }}
-              disabled={deleting}
-              className="bg-[#C53D3D] text-white hover:bg-[#C53D3D]/90"
-            >
-              {deleting ? <Loader2 className="size-4 animate-spin" /> : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {filtered.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => onOpenNote(null)}
+          className="fixed bottom-6 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-xl transition-transform hover:scale-105 sm:bottom-8 sm:right-8 sm:h-14 sm:w-14"
+          aria-label="New note"
+        >
+          <Plus className="h-5 w-5 sm:h-6 sm:w-6" />
+        </button>
+      ) : null}
     </>
   );
 }
@@ -240,68 +159,56 @@ function NoteCard({
   note,
   onOpen,
   onPin,
-  onDelete,
 }: {
   note: GardenNote;
   onOpen: () => void;
   onPin: (e: React.MouseEvent) => void;
-  onDelete: (e: React.MouseEvent) => void;
 }) {
-  const preview = notePreviewLines(note.body);
-  const tagColor = GARDEN_TAG_COLORS[note.tag as GardenTag] ?? GARDEN_TAG_COLORS.General;
+  const colors = noteCardColors(note.tag as GardenTag);
+  const title = note.title.trim() || "Untitled";
+  const subtitle = notePreviewLines(note.body, 2);
 
   return (
-    <div
+    <article
       role="button"
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
-      className="group flex cursor-pointer flex-col rounded-2xl border border-black/5 bg-white p-5 text-left transition-shadow hover:shadow-md"
+      className="group relative flex min-h-[148px] cursor-pointer flex-col rounded-2xl p-4 text-left transition-transform hover:-translate-y-0.5 hover:shadow-md sm:min-h-[160px] sm:rounded-3xl sm:p-5"
+      style={{ background: colors.bg, color: colors.text }}
     >
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <h3 className="line-clamp-1 text-base font-normal leading-tight">
-          {note.title.trim() || "Untitled"}
+      <div className="min-h-0 flex-1">
+        <h3 className="line-clamp-3 text-sm font-normal leading-snug sm:line-clamp-4 sm:text-base md:text-lg">
+          {title}
         </h3>
-        <div className="flex shrink-0 gap-1">
-          <button
-            type="button"
-            onClick={onPin}
-            className={cn(
-              "rounded-md p-1.5 transition-colors hover:bg-black/5",
-              note.pinned ? "text-foreground" : "text-foreground/30 group-hover:text-foreground/50",
-            )}
-            aria-label={note.pinned ? "Unpin note" : "Pin note"}
-          >
-            <Pin className={cn("h-4 w-4", note.pinned && "fill-current")} />
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="rounded-md p-1.5 text-foreground/30 transition-colors hover:bg-black/5 hover:text-foreground/60"
-            aria-label="Delete note"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
+        {subtitle ? (
+          <p className="mt-2 line-clamp-2 text-[11px] font-light leading-relaxed opacity-70 sm:text-xs">
+            {subtitle}
+          </p>
+        ) : null}
       </div>
 
-      {preview && (
-        <p className="mb-4 line-clamp-2 text-sm font-light leading-relaxed text-foreground/60 whitespace-pre-line">
-          {preview}
-        </p>
-      )}
-
-      <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-        <span
-          className="rounded-full px-2.5 py-0.5 text-[11px] font-light text-white"
-          style={{ background: tagColor }}
+      <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+        <time className="text-[10px] font-light opacity-60 sm:text-[11px]">
+          {formatNoteCardDate(note)}
+        </time>
+        <button
+          type="button"
+          aria-label={note.pinned ? "Unpin note" : "Pin note"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPin(e);
+          }}
+          className="shrink-0 p-0.5 text-white/75 transition-opacity hover:text-white"
         >
-          {note.tag}
-        </span>
-        <span className="text-xs font-light text-foreground/40">
-          {formatNoteDate(note.updated_at)}
-        </span>
+          <Star
+            className={cn(
+              "h-3.5 w-3.5 sm:h-4 sm:w-4",
+              note.pinned ? "fill-white text-white" : "fill-none",
+            )}
+          />
+        </button>
       </div>
-    </div>
+    </article>
   );
 }

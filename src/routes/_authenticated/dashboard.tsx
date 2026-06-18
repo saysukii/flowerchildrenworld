@@ -49,7 +49,7 @@ function DashboardPage() {
           <p className="mt-2 text-sm text-foreground/60">{dateLabel}</p>
         </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Card>
             <Label>Today</Label>
             <h2 className="mt-2 text-xl font-normal">What's happening</h2>

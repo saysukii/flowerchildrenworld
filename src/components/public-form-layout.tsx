@@ -53,7 +53,7 @@ export function PublicFormLayout({
 }
 
 export const fieldInputCls =
-  "w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm font-light placeholder:text-foreground/40 focus:border-[#3AB819] focus:outline-none focus:ring-1 focus:ring-[#3AB819]";
+  "w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-base font-light placeholder:text-foreground/40 focus:border-[#3AB819] focus:outline-none focus:ring-1 focus:ring-[#3AB819] md:text-sm";
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -96,7 +96,7 @@ export function AvailabilityPicker() {
   return (
     <div>
       <span className="mb-1.5 block text-xs font-light text-foreground/60">Availability</span>
-      <div className="flex flex-nowrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {DAYS.map((d) => (
           <label
             key={d}

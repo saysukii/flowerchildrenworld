@@ -3,7 +3,7 @@
 @import "tw-animate-css";
 
 .font-label {
-  font-family: 'Adigiana Toybox', 'Nohemi', cursive;
+  font-family: 'Adigiana Toybox', cursive;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
@@ -148,6 +148,13 @@
 @font-face {
   font-family: 'Nohemi';
   src: url('/Nohemi-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Adigiana Toybox';
+  src: url('/Adigiana-Toybox.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
   font-display: swap;

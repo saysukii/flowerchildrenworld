@@ -48,7 +48,7 @@ function FormsPage() {
           </p>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {FORMS.map((f) => (
             <section
               key={f.url}
