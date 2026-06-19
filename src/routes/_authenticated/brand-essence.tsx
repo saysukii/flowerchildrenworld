@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Upload } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { PageLabel } from "@/components/page-label";
 import { UploadAssetDialog } from "@/components/brand-essence/upload-asset-dialog";
 import { ColorPaletteCard } from "@/components/brand-essence/color-palette-card";
 import { MissionCard } from "@/components/brand-essence/mission-card";
@@ -57,7 +58,7 @@ function BrandEssencePage() {
     <AppShell>
       <div className="mx-auto max-w-6xl">
         <header className="mb-6 sm:mb-8">
-          <span className="font-label text-[11px] text-foreground/50">Brand Essence</span>
+          <PageLabel>Brand Essence</PageLabel>
           <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">Everything that makes us, us.</h1>
           <p className="mt-2 text-sm text-foreground/60">
             Logos, colors, typography, templates, copy, and core documents — one source of truth.

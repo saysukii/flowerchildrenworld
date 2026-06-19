@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
+import { PageLabel } from "@/components/page-label";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -34,7 +35,7 @@ function greeting(d: Date) {
 function DashboardPage() {
   const now = useMemo(() => new Date(), []);
   const dateLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-  const ritual = DAY_RITUALS[0];
+  const ritual = DAY_RITUALS[now.getDay()];
 
   return (
     <AppShell>
@@ -62,7 +63,6 @@ function DashboardPage() {
             <Label>Routine Pulse</Label>
             <h2 className="mt-2 text-xl font-normal">{ritual.name}</h2>
             <p className="mt-4 text-sm text-foreground/60 leading-relaxed">{ritual.description}</p>
-            <div className="mt-6 h-1 w-12 rounded-full" style={{ background: "#15AAD2" }} />
             <Link
               to="/routine-pulse"
               className="mt-4 inline-flex items-center gap-1.5 text-sm font-normal"
@@ -94,5 +94,5 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <span className="font-label text-[11px] text-foreground/50">{children}</span>;
+  return <PageLabel>{children}</PageLabel>;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Search, Sheet } from "lucide-react";
+import { Import, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { FILTER_CONTROL_CLASS } from "@/components/community/filter-control-styles";
 import { Button } from "@/components/ui/button";
@@ -383,7 +383,7 @@ export function SheetsImportButton({
       aria-label="Import from Sheets"
       className={`inline-flex min-w-0 justify-center gap-2 text-foreground/80 transition-colors hover:bg-black/5 ${FILTER_CONTROL_CLASS} ${iconOnly ? "!w-[42px] !px-0" : "px-4"} ${className ?? ""}`}
     >
-      <Sheet className="h-4 w-4 shrink-0" />
+      <Import className="h-4 w-4 shrink-0" />
       {!iconOnly && <span className="truncate">Import from Sheets</span>}
     </button>
   );

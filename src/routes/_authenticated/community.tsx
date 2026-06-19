@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Search, ChevronDown, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { PageLabel } from "@/components/page-label";
 import { SheetsImportButton, SheetsImportDialog } from "@/components/community/sheets-import-dialog";
 import {
   FILTER_CONTROL_CLASS,
@@ -203,7 +204,7 @@ function CommunityPage() {
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <header className="mb-6 sm:mb-8">
-          <span className="font-label text-[11px] text-foreground/50">Community</span>
+          <PageLabel>Community</PageLabel>
           <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">The village directory</h1>
           <p className="mt-2 text-sm text-foreground/60">
             Children, guardians, volunteers, and partners — one tidy home.
