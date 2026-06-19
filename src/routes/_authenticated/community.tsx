@@ -201,7 +201,7 @@ function CommunityPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl pb-[calc(2.625rem+max(1.5rem,env(safe-area-inset-bottom)))] md:pb-[4.125rem]">
         {/* Header */}
         <header className="mb-6 sm:mb-8">
           <PageLabel>Community</PageLabel>
@@ -229,42 +229,24 @@ function CommunityPage() {
           </div>
 
           <div className="-mx-4 overflow-x-auto sm:mx-0">
-            <div className="flex min-w-max items-center gap-2 px-4 sm:w-full sm:min-w-0 sm:px-0">
-              <div className="flex gap-2">
-                {TABS.map((t) => {
-                  const isActive = t.key === tab;
-                  return (
-                    <button
-                      key={t.key}
-                      onClick={() => setTab(t.key)}
-                      className={[
-                        "rounded-full px-4 py-2 text-sm font-light transition-colors whitespace-nowrap",
-                        isActive
-                          ? "bg-foreground text-background"
-                          : "text-foreground/70 hover:bg-black/5",
-                      ].join(" ")}
-                    >
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                <SheetsImportButton
-                  onClick={() => setSheetsImportOpen(true)}
-                  iconOnly
-                />
-
-                <button
-                  onClick={() => setAddOpen(true)}
-                  aria-label={active.addLabel}
-                  className={`${COMMUNITY_PRIMARY_BUTTON_CLASS} !w-[42px] !px-0 shrink-0`}
-                  style={{ background: "#3AB819" }}
-                >
-                  <Plus className="h-4 w-4 shrink-0" />
-                </button>
-              </div>
+            <div className="flex min-w-max gap-2 px-4 sm:px-0">
+              {TABS.map((t) => {
+                const isActive = t.key === tab;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={[
+                      "rounded-full px-4 py-2 text-sm font-light transition-colors whitespace-nowrap",
+                      isActive
+                        ? "bg-foreground text-background"
+                        : "text-foreground/70 hover:bg-black/5",
+                    ].join(" ")}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -424,6 +406,24 @@ function CommunityPage() {
             </table>
           </div>
         </section>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur md:left-64">
+        <div className="mx-auto flex max-w-6xl items-center justify-end gap-2 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 md:px-8 md:pb-6 lg:px-10">
+          <SheetsImportButton
+            onClick={() => setSheetsImportOpen(true)}
+            iconOnly
+          />
+
+          <button
+            onClick={() => setAddOpen(true)}
+            aria-label={active.addLabel}
+            className={`${COMMUNITY_PRIMARY_BUTTON_CLASS} !w-[42px] !px-0 shrink-0`}
+            style={{ background: "#3AB819" }}
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+          </button>
+        </div>
       </div>
 
       <SheetsImportDialog
