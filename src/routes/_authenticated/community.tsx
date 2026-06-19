@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Search, ChevronDown, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageLabel } from "@/components/page-label";
 import { SheetsImportButton, SheetsImportDialog } from "@/components/community/sheets-import-dialog";
@@ -211,48 +211,7 @@ function CommunityPage() {
           </p>
         </header>
 
-        {/* Tabs + actions */}
-        <div className="-mx-4 mb-5 overflow-x-auto sm:mx-0">
-          <div className="flex min-w-max items-center gap-2 px-4 sm:w-full sm:min-w-0 sm:px-0">
-            <div className="flex gap-2">
-              {TABS.map((t) => {
-                const isActive = t.key === tab;
-                return (
-                  <button
-                    key={t.key}
-                    onClick={() => setTab(t.key)}
-                    className={[
-                      "rounded-full px-4 py-2 text-sm font-light transition-colors whitespace-nowrap",
-                      isActive
-                        ? "bg-foreground text-background"
-                        : "text-foreground/70 hover:bg-black/5",
-                    ].join(" ")}
-                  >
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              <SheetsImportButton
-                onClick={() => setSheetsImportOpen(true)}
-                iconOnly
-              />
-
-              <button
-                onClick={() => setAddOpen(true)}
-                aria-label={active.addLabel}
-                className={`${COMMUNITY_PRIMARY_BUTTON_CLASS} !w-[42px] !px-0 shrink-0`}
-                style={{ background: "#3AB819" }}
-              >
-                <Plus className="h-4 w-4 shrink-0" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Controls — stacked full-width at every screen size */}
+        {/* Search, actions, and tabs */}
         <div className="mb-5 flex flex-col gap-3">
           <div
             className={`relative overflow-hidden pl-9 pr-3 focus-within:border-foreground/30 ${FILTER_CONTROL_CLASS}`}
@@ -269,13 +228,45 @@ function CommunityPage() {
             />
           </div>
 
-          <button
-            type="button"
-            className={`justify-between gap-2 px-4 text-foreground/80 hover:bg-black/5 ${FILTER_CONTROL_CLASS}`}
-          >
-            <span className="truncate">All statuses</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-foreground/50" />
-          </button>
+          <div className="-mx-4 overflow-x-auto sm:mx-0">
+            <div className="flex min-w-max items-center gap-2 px-4 sm:w-full sm:min-w-0 sm:px-0">
+              <div className="flex gap-2">
+                {TABS.map((t) => {
+                  const isActive = t.key === tab;
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => setTab(t.key)}
+                      className={[
+                        "rounded-full px-4 py-2 text-sm font-light transition-colors whitespace-nowrap",
+                        isActive
+                          ? "bg-foreground text-background"
+                          : "text-foreground/70 hover:bg-black/5",
+                      ].join(" ")}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <SheetsImportButton
+                  onClick={() => setSheetsImportOpen(true)}
+                  iconOnly
+                />
+
+                <button
+                  onClick={() => setAddOpen(true)}
+                  aria-label={active.addLabel}
+                  className={`${COMMUNITY_PRIMARY_BUTTON_CLASS} !w-[42px] !px-0 shrink-0`}
+                  style={{ background: "#3AB819" }}
+                >
+                  <Plus className="h-4 w-4 shrink-0" />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Records */}
