@@ -171,7 +171,7 @@ function SidebarInner({
               href={item.to}
               onClick={onNavigate}
               className={[
-                "flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-nohemi-350 transition-colors",
+                "flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-light transition-colors",
                 active
                   ? "bg-foreground text-background"
                   : "text-foreground/70 hover:bg-black/5 hover:text-foreground",

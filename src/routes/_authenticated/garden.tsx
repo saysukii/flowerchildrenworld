@@ -90,10 +90,10 @@ function GardenPage() {
                   type="button"
                   onClick={() => setTab(t.key)}
                   className={cn(
-                    "relative shrink-0 pb-2.5 text-sm transition-colors whitespace-nowrap",
+                    "relative shrink-0 pb-2.5 text-sm font-light transition-colors whitespace-nowrap",
                     active
-                      ? "font-normal text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-foreground"
-                      : "font-light text-foreground/45 hover:text-foreground/70",
+                      ? "text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-foreground"
+                      : "text-foreground/45 hover:text-foreground/70",
                   )}
                 >
                   {t.label}
