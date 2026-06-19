@@ -202,9 +202,63 @@
   }
 }
 
+@layer utilities {
+  /* Nohemi only ships 300 + 400; this reads ~350 between Light and Regular */
+  .font-nohemi-350 {
+    font-weight: 300;
+    -webkit-text-stroke: 0.18px currentColor;
+    paint-order: stroke fill;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Excalidraw confirm dialogs (portaled outside canvas wrapper) */
+.excalidraw-modal-container .confirm-dialog-buttons,
+.excalidraw-modal-container .confirm-dialog-button,
+.excalidraw .confirm-dialog-buttons,
+.excalidraw .confirm-dialog-button {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center !important;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  margin-top: 1.25rem;
+}
+
+.excalidraw-modal-container .confirm-dialog-buttons .Dialog__action-button,
+.excalidraw-modal-container .confirm-dialog-button .Dialog__action-button,
+.excalidraw .confirm-dialog-buttons .Dialog__action-button,
+.excalidraw .confirm-dialog-button .Dialog__action-button {
+  margin: 0 !important;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
+  }
+
+  html,
+  body,
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   html, body {
@@ -217,4 +271,58 @@
   h1, h2, h3, h4, h5, h6 {
     font-weight: 400;
   }
+}
+
+/* Keep scroll behavior; hide scrollbars everywhere (including portaled / third-party UI). */
+html,
+body,
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+*::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  display: none !important;
+  background: transparent !important;
+}
+
+input[type="search"] {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button {
+  display: none;
+}
+
+/* Mobile browsers inflate input font-size; keep filter fields aligned with buttons. */
+.fcw-filter-control {
+  height: 42px;
+  min-height: 42px;
+  max-height: 42px;
+  box-sizing: border-box;
+}
+
+.fcw-filter-control input.fcw-filter-input,
+.fcw-filter-control input.fcw-filter-input::placeholder {
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+}
+
+.fcw-filter-control input.fcw-filter-input {
+  height: 100%;
+  max-height: 100%;
 }

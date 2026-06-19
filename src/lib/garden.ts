@@ -51,6 +51,20 @@ export type GardenWhiteboardScene = {
   files?: Record<string, unknown>;
 };
 
+export const EMPTY_WHITEBOARD_SCENE: GardenWhiteboardScene = {
+  elements: [],
+  files: {},
+};
+
+function isPersistedWhiteboardElement(element: unknown) {
+  if (!element || typeof element !== "object") return false;
+  return (element as Record<string, unknown>).isDeleted !== true;
+}
+
+export function whiteboardHasContent(scene: GardenWhiteboardScene) {
+  return sanitizeWhiteboardScene(scene).elements.length > 0;
+}
+
 /** App state fields safe to round-trip through JSON (no Maps/Sets). */
 const WHITEBOARD_APP_STATE_KEYS = [
   "viewBackgroundColor",
@@ -72,7 +86,9 @@ export function sanitizeWhiteboardScene(scene: GardenWhiteboardScene): GardenWhi
   }
 
   return {
-    elements: Array.isArray(scene.elements) ? scene.elements : [],
+    elements: Array.isArray(scene.elements)
+      ? scene.elements.filter(isPersistedWhiteboardElement)
+      : [],
     files:
       scene.files && typeof scene.files === "object" && !Array.isArray(scene.files)
         ? scene.files
@@ -224,6 +240,16 @@ export function formatNoteDateLong(iso: string) {
     month: "long",
     day: "numeric",
     year: "numeric",
+  });
+}
+
+export function formatNoteDateTime(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 

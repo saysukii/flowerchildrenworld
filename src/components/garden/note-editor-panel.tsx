@@ -21,6 +21,7 @@ import {
   GARDEN_NOTE_CARD_COLORS,
   GARDEN_TAGS,
   ensureNoteHtml,
+  formatNoteDateTime,
   type GardenNote,
   type GardenTag,
 } from "@/lib/garden";
@@ -44,6 +45,7 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(note?.updated_at ?? null);
   const dirtyRef = useRef(false);
   const noteIdRef = useRef(note?.id);
 
@@ -52,6 +54,7 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
     setTitle(note?.title ?? "");
     setBody(ensureNoteHtml(note?.body ?? ""));
     setTag((note?.tag as GardenTag) ?? "General");
+    setLastUpdatedAt(note?.updated_at ?? null);
     dirtyRef.current = false;
   }, [note]);
 
@@ -78,6 +81,7 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
         return;
       }
       dirtyRef.current = false;
+      setLastUpdatedAt(data.updated_at);
       onSaved(data as GardenNote);
       toast.success("Note saved.");
       return;
@@ -101,6 +105,7 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
     }
     noteIdRef.current = data.id;
     dirtyRef.current = false;
+    setLastUpdatedAt(data.updated_at);
     onSaved(data as GardenNote);
     toast.success("Note saved.");
   }, [body, onSaved, tag, title, userId]);
@@ -140,7 +145,7 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
       <div className="relative z-10 flex h-[100dvh] w-full max-h-[100dvh] flex-col overflow-hidden rounded-t-3xl bg-[#FCFCFC] shadow-2xl sm:h-auto sm:max-h-[min(92vh,900px)] sm:max-w-2xl sm:rounded-3xl md:max-w-3xl">
         <header className="flex shrink-0 items-center justify-between border-b border-black/5 px-4 py-3 sm:px-6">
           <p className="text-xs font-light text-foreground/50">
-            {isNew ? "New note" : "Notes"}
+            {lastUpdatedAt ? formatNoteDateTime(lastUpdatedAt) : "New note"}
           </p>
           <button
             aria-label="Close"
@@ -171,7 +176,7 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
             className="mb-4 w-full border-0 bg-transparent text-xl font-normal leading-tight placeholder:text-foreground/30 focus:outline-none sm:mb-5 sm:text-2xl md:text-3xl"
           />
 
-          <div className="mb-5 flex flex-wrap gap-2 sm:mb-6">
+          <div className="-mx-4 mb-5 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:mb-6 sm:px-0">
             {GARDEN_TAGS.map((t) => (
               <TagChip
                 key={t}
@@ -199,22 +204,28 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
         </div>
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-black/5 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
-          <div className="flex items-center gap-4">
+          <div className="inline-flex items-center text-sm font-light leading-none">
             <button
               type="button"
               onClick={onClose}
-              className="text-sm font-light text-foreground/60 hover:text-foreground"
+              className="text-foreground/60 hover:text-foreground"
             >
               Close
             </button>
             {!isNew ? (
-              <button
-                type="button"
-                onClick={() => setDeleteOpen(true)}
-                className="text-sm font-light text-[#C53D3D]/80 hover:text-[#C53D3D]"
-              >
-                Delete
-              </button>
+              <>
+                <span
+                  className="mx-2 inline-block h-1 w-1 shrink-0 rounded-full bg-foreground/25"
+                  aria-hidden
+                />
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(true)}
+                  className="text-[#C53D3D]/80 hover:text-[#C53D3D]"
+                >
+                  Delete
+                </button>
+              </>
             ) : null}
           </div>
           <button
@@ -224,7 +235,7 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
             className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2 text-sm font-normal text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             style={{ background: GARDEN_GREEN }}
           >
-            {saving ? <Loader2 className="size-4 animate-spin" /> : "Save note"}
+            {saving ? <Loader2 className="size-4 animate-spin" /> : "Save"}
           </button>
         </footer>
       </div>
@@ -271,10 +282,14 @@ function TagChip({
       type="button"
       onClick={onSelect}
       className={cn(
-        "rounded-full px-3 py-1.5 text-xs font-light transition-colors",
-        active ? "ring-2 ring-foreground/20" : "opacity-80",
+        "shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-light transition-[opacity,box-shadow]",
+        active ? "opacity-100" : "opacity-80",
       )}
-      style={{ background: colors.bg, color: colors.text }}
+      style={{
+        background: colors.bg,
+        color: colors.text,
+        boxShadow: active ? `inset 0 0 0 2px ${colors.accent}` : undefined,
+      }}
     >
       {tag}
     </button>

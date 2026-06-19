@@ -4,6 +4,11 @@ import { Plus, Search, ChevronDown, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { SheetsImportButton, SheetsImportDialog } from "@/components/community/sheets-import-dialog";
 import {
+  FILTER_CONTROL_CLASS,
+  FILTER_INPUT_CLASS,
+  COMMUNITY_PRIMARY_BUTTON_CLASS,
+} from "@/components/community/filter-control-styles";
+import {
   type ChildRecord,
   type CommunityStore,
   type CommunityTab,
@@ -205,62 +210,71 @@ function CommunityPage() {
           </p>
         </header>
 
-        {/* Tabs */}
-        <div className="-mx-4 sm:mx-0 mb-5 overflow-x-auto">
-          <div className="flex gap-2 px-4 sm:px-0 min-w-max">
-            {TABS.map((t) => {
-              const isActive = t.key === tab;
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setTab(t.key)}
-                  className={[
-                    "rounded-full px-4 py-2 text-sm font-light transition-colors whitespace-nowrap",
-                    isActive
-                      ? "bg-foreground text-background"
-                      : "text-foreground/70 hover:bg-black/5",
-                  ].join(" ")}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
+        {/* Tabs + actions */}
+        <div className="-mx-4 mb-5 overflow-x-auto sm:mx-0">
+          <div className="flex min-w-max items-center gap-2 px-4 sm:w-full sm:min-w-0 sm:px-0">
+            <div className="flex gap-2">
+              {TABS.map((t) => {
+                const isActive = t.key === tab;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={[
+                      "rounded-full px-4 py-2 text-sm font-light transition-colors whitespace-nowrap",
+                      isActive
+                        ? "bg-foreground text-background"
+                        : "text-foreground/70 hover:bg-black/5",
+                    ].join(" ")}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <SheetsImportButton
+                onClick={() => setSheetsImportOpen(true)}
+                iconOnly
+              />
+
+              <button
+                onClick={() => setAddOpen(true)}
+                aria-label={active.addLabel}
+                className={`${COMMUNITY_PRIMARY_BUTTON_CLASS} !w-[42px] !px-0 shrink-0`}
+                style={{ background: "#3AB819" }}
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Controls row */}
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1 sm:max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40" />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={active.searchPlaceholder}
-                className="w-full rounded-full border border-black/10 bg-white py-2.5 pl-9 pr-3 text-base font-light placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none md:text-sm"
-              />
-            </div>
-            <button
-              type="button"
-              className="inline-flex items-center justify-between gap-2 rounded-full border border-black/10 bg-white px-4 py-2.5 text-sm font-light text-foreground/80 hover:bg-black/5 sm:w-auto"
-            >
-              All statuses
-              <ChevronDown className="h-4 w-4 text-foreground/50" />
-            </button>
+        {/* Controls — stacked full-width at every screen size */}
+        <div className="mb-5 flex flex-col gap-3">
+          <div
+            className={`relative overflow-hidden pl-9 pr-3 focus-within:border-foreground/30 ${FILTER_CONTROL_CLASS}`}
+          >
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40" />
+            <input
+              type="text"
+              inputMode="search"
+              enterKeyHint="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={active.searchPlaceholder}
+              className={FILTER_INPUT_CLASS}
+            />
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <SheetsImportButton onClick={() => setSheetsImportOpen(true)} />
-            <button
-              onClick={() => setAddOpen(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-normal text-white transition-opacity hover:opacity-90"
-              style={{ background: "#3AB819" }}
-            >
-              <Plus className="h-4 w-4" />
-              {active.addLabel}
-            </button>
-          </div>
+          <button
+            type="button"
+            className={`justify-between gap-2 px-4 text-foreground/80 hover:bg-black/5 ${FILTER_CONTROL_CLASS}`}
+          >
+            <span className="truncate">All statuses</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-foreground/50" />
+          </button>
         </div>
 
         {/* Records */}

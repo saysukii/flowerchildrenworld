@@ -1,13 +1,19 @@
 import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
-import { FileText, Save } from "lucide-react";
+import { FileText, Save, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { WhiteboardMobileColorPortal } from "@/components/garden/whiteboard-mobile-color-portal";
+import { WhiteboardColorToolbarPortal } from "@/components/garden/whiteboard-color-toolbar-portal";
+import { WhiteboardMobileToolbarPortal, hasWhiteboardSelection } from "@/components/garden/whiteboard-mobile-toolbar-portal";
 import {
-  hasWhiteboardSelection,
-  WhiteboardMobileToolbarPortal,
-} from "@/components/garden/whiteboard-mobile-toolbar-portal";
-import { WhiteboardColorToolbar } from "@/components/garden/whiteboard-color-toolbar";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { sanitizeWhiteboardScene, type GardenWhiteboardScene } from "@/lib/garden";
 import {
   readWhiteboardFillColor,
@@ -24,6 +30,7 @@ type ExcalidrawCanvasProps = {
   onChange: (scene: GardenWhiteboardScene) => void;
   onSave: () => Promise<void>;
   onExportToNote: (api: ExcalidrawApi) => Promise<void>;
+  onReset: () => Promise<void>;
   onMenuOpenChange?: (open: boolean) => void;
   isMobile?: boolean;
 };
@@ -33,18 +40,20 @@ export function ExcalidrawCanvas({
   onChange,
   onSave,
   onExportToNote,
+  onReset,
   onMenuOpenChange,
   isMobile = false,
 }: ExcalidrawCanvasProps) {
   const apiRef = useRef<ExcalidrawApi | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuOpenRef = useRef(false);
-  const hadSelectionRef = useRef(false);
+  const selectionKeyRef = useRef("");
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [strokeColor, setStrokeColor] = useState("#1e1e1e");
   const [fillColor, setFillColor] = useState("#ffc9c9");
   const [strokeWidth, setStrokeWidth] = useState<WhiteboardStrokeWidth>(2);
   const [opacity, setOpacity] = useState(100);
-
   const initialData = useMemo(
     () => sanitizeWhiteboardScene(initialScene),
     [initialScene],
@@ -56,6 +65,7 @@ export function ExcalidrawCanvas({
       className={cn(
         "relative h-full w-full overscroll-contain touch-manipulation",
         "[&_.excalidraw]:h-full [&_.color-picker-container]:hidden",
+        "[&_.excalidraw--mobile_.mobile-misc-tools-container]:hidden",
         "[&_.App-mobile-menu_.panelColumn]:gap-1",
         "[&_.App-mobile-menu_h3]:mb-1 [&_.App-mobile-menu_h3]:text-xs [&_.App-mobile-menu_h3]:font-normal",
         isMobile && [
@@ -67,20 +77,7 @@ export function ExcalidrawCanvas({
         ],
       )}
     >
-      <div className="pointer-events-none absolute bottom-3 left-3 z-[60] max-sm:hidden sm:bottom-auto sm:left-auto sm:right-3 sm:top-3">
-        <WhiteboardColorToolbar
-          apiRef={apiRef}
-          strokeColor={strokeColor}
-          fillColor={fillColor}
-          strokeWidth={strokeWidth}
-          opacity={opacity}
-          onStrokeColorChange={setStrokeColor}
-          onFillColorChange={setFillColor}
-          onStrokeWidthChange={setStrokeWidth}
-          onOpacityChange={setOpacity}
-        />
-      </div>
-      <WhiteboardMobileColorPortal
+      <WhiteboardColorToolbarPortal
         containerRef={containerRef}
         apiRef={apiRef}
         strokeColor={strokeColor}
@@ -91,6 +88,7 @@ export function ExcalidrawCanvas({
         onFillColorChange={setFillColor}
         onStrokeWidthChange={setStrokeWidth}
         onOpacityChange={setOpacity}
+        touchFriendly={isMobile}
       />
       <WhiteboardMobileToolbarPortal containerRef={containerRef} />
       <Excalidraw
@@ -106,18 +104,29 @@ export function ExcalidrawCanvas({
           setStrokeWidth(readWhiteboardStrokeWidth(appState, elements));
           setOpacity(readWhiteboardOpacity(appState, elements));
 
-          const hasSelection = hasWhiteboardSelection(
-            appState as unknown as Record<string, unknown>,
-          );
-          if (
-            isMobile &&
-            hasSelection &&
-            !hadSelectionRef.current &&
-            appState.openMenu !== "shape"
-          ) {
-            apiRef.current?.updateScene({ appState: { openMenu: "shape" } });
+          const appStateRecord = appState as unknown as Record<string, unknown>;
+
+          if (isMobile) {
+            const selected = appStateRecord.selectedElementIds;
+            const selectionKey =
+              selected instanceof Set
+                ? [...selected].join(",")
+                : selected && typeof selected === "object"
+                  ? Object.entries(selected as Record<string, unknown>)
+                      .filter(([, active]) => active)
+                      .map(([id]) => id)
+                      .join(",")
+                  : "";
+            const hasSelection = hasWhiteboardSelection(appStateRecord);
+            if (
+              hasSelection &&
+              selectionKey !== selectionKeyRef.current &&
+              appState.openMenu === "shape"
+            ) {
+              apiRef.current?.updateScene({ appState: { openMenu: null } });
+            }
+            selectionKeyRef.current = selectionKey;
           }
-          hadSelectionRef.current = hasSelection;
 
           onChange({
             elements: elements as unknown[],
@@ -159,11 +168,43 @@ export function ExcalidrawCanvas({
           </MainMenu.Item>
           <MainMenu.Separator />
           <MainMenu.DefaultItems.SearchMenu />
-          <MainMenu.DefaultItems.ClearCanvas />
+          <MainMenu.Item
+            onSelect={() => setResetOpen(true)}
+            icon={<Trash2 className="h-4 w-4" strokeWidth={1.75} />}
+          >
+            Reset canvas
+          </MainMenu.Item>
           <MainMenu.Separator />
           <MainMenu.DefaultItems.ChangeCanvasBackground />
         </MainMenu>
       </Excalidraw>
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-normal">Reset canvas?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This clears the entire whiteboard. Your drawings will be removed permanently.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resetting}
+              onClick={(e) => {
+                e.preventDefault();
+                setResetting(true);
+                void onReset().finally(() => {
+                  setResetting(false);
+                  setResetOpen(false);
+                });
+              }}
+              className="bg-[#C53D3D] text-white hover:bg-[#C53D3D]/90"
+            >
+              Reset canvas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

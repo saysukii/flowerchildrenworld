@@ -5,19 +5,13 @@ export type OAuthIntegration = {
 };
 
 export type IntegrationsConfig = {
-  notion: OAuthIntegration;
-  luma: OAuthIntegration;
   google: OAuthIntegration;
-  stripe: OAuthIntegration;
 };
 
 const STORAGE_KEY = "fcw-integrations";
 
 const EMPTY: IntegrationsConfig = {
-  notion: { connected: false, accountName: "" },
-  luma: { connected: false, accountName: "" },
   google: { connected: false, accountName: "" },
-  stripe: { connected: false, accountName: "" },
 };
 
 function parseIntegration(value: unknown): OAuthIntegration {
@@ -39,10 +33,7 @@ export function loadIntegrations(): IntegrationsConfig {
     if (!raw) return EMPTY;
     const parsed = JSON.parse(raw) as Partial<IntegrationsConfig>;
     return {
-      notion: parseIntegration(parsed.notion),
-      luma: parseIntegration(parsed.luma),
       google: parseIntegration(parsed.google),
-      stripe: parseIntegration(parsed.stripe),
     };
   } catch {
     return EMPTY;

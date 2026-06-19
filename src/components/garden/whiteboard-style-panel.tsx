@@ -4,6 +4,8 @@ import { GARDEN_BRAND_SWATCHES } from "@/lib/garden";
 import { normalizeHex } from "@/lib/brand-colors";
 import {
   applyWhiteboardStyle,
+  isTransparentWhiteboardColor,
+  toWhiteboardHex,
   WHITEBOARD_STROKE_WIDTHS,
   type WhiteboardStrokeWidth,
 } from "@/lib/garden-whiteboard-scene";
@@ -51,14 +53,23 @@ export function WhiteboardStylePanel({
   const [dragPreview, setDragPreview] = useState<string | null>(null);
   const [hexInput, setHexInput] = useState("");
   const [hexFocused, setHexFocused] = useState(false);
-  const activeColor = tab === "stroke" ? strokeColor : fillColor;
-  const shownColor = dragPreview ?? activeColor;
+  const rawColor = tab === "stroke" ? strokeColor : fillColor;
+  const isTransparent = isTransparentWhiteboardColor(rawColor);
+  const pickerColor = toWhiteboardHex(
+    rawColor,
+    tab === "stroke" ? "#1E1E1E" : "#FFC9C9",
+  );
+  const shownColor = dragPreview ?? (isTransparent ? pickerColor : rawColor);
 
   useEffect(() => {
     if (!hexFocused) {
-      setHexInput(shownColor.replace(/^#/, "").toUpperCase());
+      if (isTransparent) {
+        setHexInput("");
+      } else {
+        setHexInput(toWhiteboardHex(rawColor, "#000000").replace(/^#/, ""));
+      }
     }
-  }, [shownColor, hexFocused]);
+  }, [rawColor, isTransparent, hexFocused]);
 
   const liveApplyColor = useCallback(
     (hex: string) => {
@@ -187,11 +198,14 @@ export function WhiteboardStylePanel({
                 e.currentTarget.blur();
               }
               if (e.key === "Escape") {
-                setHexInput(shownColor.replace(/^#/, "").toUpperCase());
+                setHexInput(
+                  isTransparent ? "" : toWhiteboardHex(rawColor, "#000000").replace(/^#/, ""),
+                );
                 e.currentTarget.blur();
               }
             }}
-            className="w-[3.5rem] bg-transparent text-right outline-none selection:bg-primary/15"
+            placeholder={isTransparent ? "None" : undefined}
+            className="w-[3.5rem] bg-transparent text-right outline-none selection:bg-primary/15 placeholder:text-foreground/30"
             aria-label="Hex color"
           />
         </div>
@@ -199,7 +213,9 @@ export function WhiteboardStylePanel({
 
       <div className={cn("flex flex-nowrap", compact ? "gap-2" : "gap-1.5")}>
         {QUICK_SWATCHES.map((color) => {
-          const selected = shownColor.toUpperCase() === color.toUpperCase();
+          const selected =
+            !isTransparent &&
+            toWhiteboardHex(rawColor, color).toUpperCase() === color.toUpperCase();
           return (
             <button
               key={color}
@@ -223,7 +239,7 @@ export function WhiteboardStylePanel({
       <ColorWheelPicker
         variant="field"
         size="mini"
-        value={activeColor}
+        value={pickerColor}
         onChange={commitColor}
         onLiveChange={liveApplyColor}
         commitOnRelease

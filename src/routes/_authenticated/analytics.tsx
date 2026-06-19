@@ -1,5 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { fetchStripeDonationAnalytics } from "@/lib/api/stripe.functions";
+import {
+  EMPTY_STRIPE_DONATIONS,
+  formatRecentDonors,
+  formatRecurringSplit,
+  formatStripeMoney,
+  type StripeDonationAnalytics,
+} from "@/lib/stripe-analytics";
+import { supabase } from "@/integrations/supabase/client";
+import { isAdmin } from "@/lib/user-role";
 
 export const Route = createFileRoute("/_authenticated/analytics")({
   head: () => ({
@@ -24,7 +35,7 @@ type Group = {
   metrics: Metric[];
 };
 
-const GROUPS: Group[] = [
+const STATIC_GROUPS: Group[] = [
   {
     key: "community",
     label: "Community",
@@ -48,17 +59,6 @@ const GROUPS: Group[] = [
     ],
   },
   {
-    key: "donations",
-    label: "Donations",
-    color: "#EFB003",
-    metrics: [
-      { label: "Total donated this month", value: "$0", note: "Confirmed charges" },
-      { label: "Total donated all-time", value: "$0", note: "Cumulative" },
-      { label: "Recurring vs one-time", value: "—", note: "Subscription vs single charge" },
-      { label: "Recent donors", value: "—", note: "Last 10 · name · amount · date" },
-    ],
-  },
-  {
     key: "engagement",
     label: "Engagement",
     color: "#776BD9",
@@ -71,11 +71,101 @@ const GROUPS: Group[] = [
   },
 ];
 
+function donationsGroup(stripe: StripeDonationAnalytics, loading: boolean): Group {
+  if (loading) {
+    return {
+      key: "donations",
+      label: "Donations",
+      color: "#EFB003",
+      metrics: [
+        { label: "Total donated this month", value: "…", note: "Loading from Stripe" },
+        { label: "Total donated all-time", value: "…", note: "Loading from Stripe" },
+        { label: "Recurring vs one-time", value: "…", note: "Loading from Stripe" },
+        { label: "Recent donors", value: "…", note: "Loading from Stripe" },
+      ],
+    };
+  }
+
+  if (!stripe.connected) {
+    return {
+      key: "donations",
+      label: "Donations",
+      color: "#EFB003",
+      metrics: [
+        { label: "Total donated this month", value: "$0", note: "Connect Stripe in Settings" },
+        { label: "Total donated all-time", value: "$0", note: "Connect Stripe in Settings" },
+        { label: "Recurring vs one-time", value: "—", note: "Connect Stripe in Settings" },
+        { label: "Recent donors", value: "—", note: "Connect Stripe in Settings" },
+      ],
+    };
+  }
+
+  return {
+    key: "donations",
+    label: "Donations",
+    color: "#EFB003",
+    metrics: [
+      {
+        label: "Total donated this month",
+        value: formatStripeMoney(stripe.monthTotalCents, stripe.currency),
+        note: "Confirmed charges · Stripe",
+      },
+      {
+        label: "Total donated all-time",
+        value: formatStripeMoney(stripe.allTimeTotalCents, stripe.currency),
+        note: "Cumulative · Stripe",
+      },
+      {
+        label: "Recurring vs one-time",
+        value: formatRecurringSplit(stripe.recurringCount, stripe.oneTimeCount),
+        note: "Active subscriptions vs one-time charges",
+      },
+      {
+        label: "Recent donors",
+        value: formatRecentDonors(stripe.recentDonors),
+        note: "Last 10 · name · amount · date",
+      },
+    ],
+  };
+}
+
 function AnalyticsPage() {
+  const [admin, setAdmin] = useState(false);
+  const [stripe, setStripe] = useState<StripeDonationAnalytics>(EMPTY_STRIPE_DONATIONS);
+  const [loadingStripe, setLoadingStripe] = useState(true);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      const userIsAdmin = isAdmin(data.user);
+      setAdmin(userIsAdmin);
+      if (!userIsAdmin) {
+        setLoadingStripe(false);
+        return;
+      }
+
+      fetchStripeDonationAnalytics()
+        .then(setStripe)
+        .catch((error) => {
+          console.error(error);
+          setStripe(EMPTY_STRIPE_DONATIONS);
+        })
+        .finally(() => setLoadingStripe(false));
+    });
+  }, []);
+
+  const groups = useMemo(() => {
+    const donations = donationsGroup(stripe, admin && loadingStripe);
+    return [
+      STATIC_GROUPS[0],
+      STATIC_GROUPS[1],
+      donations,
+      STATIC_GROUPS[2],
+    ];
+  }, [admin, loadingStripe, stripe]);
+
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl">
-        {/* Header */}
         <header className="mb-6 sm:mb-8">
           <span className="font-label text-[11px] text-foreground/50">Analytics</span>
           <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">How we&apos;re growing</h1>
@@ -84,9 +174,8 @@ function AnalyticsPage() {
           </p>
         </header>
 
-        {/* Metric groups */}
         <div className="space-y-10">
-          {GROUPS.map((group) => (
+          {groups.map((group) => (
             <section key={group.key}>
               <h2
                 className="font-label text-[11px] mb-4"
@@ -103,17 +192,14 @@ function AnalyticsPage() {
           ))}
         </div>
 
-        {/* Chart placeholder */}
         <section className="mt-10 rounded-3xl border border-black/5 bg-white px-6 py-8 sm:px-8 sm:py-10">
           <h3 className="text-lg font-normal">Community growth over time</h3>
           <div className="mt-6 relative h-48 sm:h-56 w-full">
-            {/* Faint grid lines */}
             <div className="absolute inset-0 flex flex-col justify-between">
               {[0, 1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-px w-full bg-black/5" />
               ))}
             </div>
-            {/* Placeholder line path */}
             <svg className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
               <polyline
                 points="0,90% 20%,85% 40%,88% 60%,80% 80%,82% 100%,75%"
@@ -124,14 +210,12 @@ function AnalyticsPage() {
                 vectorEffect="non-scaling-stroke"
               />
             </svg>
-            {/* Message */}
             <div className="absolute inset-0 flex items-center justify-center">
               <p className="text-sm text-foreground/40 text-center">
                 Data will appear as your community grows.
               </p>
             </div>
           </div>
-          {/* X-axis labels */}
           <div className="mt-2 flex justify-between text-[10px] font-light text-foreground/40 uppercase tracking-wider">
             <span>Jan</span>
             <span>Feb</span>

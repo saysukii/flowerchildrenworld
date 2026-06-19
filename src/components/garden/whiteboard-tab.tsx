@@ -4,8 +4,13 @@ import { WhiteboardExportDialog } from "@/components/garden/whiteboard-export-di
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { GardenWhiteboardScene, GardenNote } from "@/lib/garden";
-import { sanitizeWhiteboardScene } from "@/lib/garden";
+import {
+  EMPTY_WHITEBOARD_SCENE,
+  sanitizeWhiteboardScene,
+  whiteboardHasContent,
+  type GardenWhiteboardScene,
+  type GardenNote,
+} from "@/lib/garden";
 import type { ExcalidrawApi } from "@/lib/garden-whiteboard-types";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -26,6 +31,7 @@ type WhiteboardTabProps = {
 export function WhiteboardTab({ userId, onNewNoteCreated }: WhiteboardTabProps) {
   const isMobile = useIsMobile();
   const [initialScene, setInitialScene] = useState<GardenWhiteboardScene | null>(null);
+  const [canvasKey, setCanvasKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasContent, setHasContent] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -51,7 +57,7 @@ export function WhiteboardTab({ userId, onNewNoteCreated }: WhiteboardTabProps) 
 
       const scene = sanitizeWhiteboardScene((data?.scene_data as GardenWhiteboardScene) ?? {});
       sceneRef.current = scene;
-      setHasContent(Array.isArray(scene.elements) && scene.elements.length > 0);
+      setHasContent(whiteboardHasContent(scene));
       setInitialScene(scene);
       setLoading(false);
     })();
@@ -67,14 +73,15 @@ export function WhiteboardTab({ userId, onNewNoteCreated }: WhiteboardTabProps) 
   }, [isMobile]);
 
   const saveScene = useCallback(
-    async (showToast = false) => {
+    async (showToast = false, sceneOverride?: GardenWhiteboardScene) => {
       if (saveInFlight.current) return;
       saveInFlight.current = true;
+      const payload = sanitizeWhiteboardScene(sceneOverride ?? sceneRef.current);
       const { error } = await supabase
         .from("garden_whiteboard")
         .upsert({
           id: WHITEBOARD_ID,
-          scene_data: sceneRef.current as never,
+          scene_data: payload as never,
           updated_by: userId,
         });
 
@@ -96,10 +103,28 @@ export function WhiteboardTab({ userId, onNewNoteCreated }: WhiteboardTabProps) 
     return () => window.clearInterval(interval);
   }, [loading, saveScene]);
 
-  const handleChange = useCallback((scene: GardenWhiteboardScene) => {
-    sceneRef.current = sanitizeWhiteboardScene(scene);
-    setHasContent(Array.isArray(scene.elements) && scene.elements.length > 0);
-  }, []);
+  const handleChange = useCallback(
+    (scene: GardenWhiteboardScene) => {
+      const sanitized = sanitizeWhiteboardScene(scene);
+      const hadContent = whiteboardHasContent(sceneRef.current);
+      sceneRef.current = sanitized;
+      const nowHasContent = whiteboardHasContent(sanitized);
+      setHasContent(nowHasContent);
+      if (hadContent && !nowHasContent) {
+        void saveScene(false, sanitized);
+      }
+    },
+    [saveScene],
+  );
+
+  const handleReset = useCallback(async () => {
+    sceneRef.current = EMPTY_WHITEBOARD_SCENE;
+    setInitialScene(EMPTY_WHITEBOARD_SCENE);
+    setHasContent(false);
+    setCanvasKey((key) => key + 1);
+    await saveScene(false, EMPTY_WHITEBOARD_SCENE);
+    toast.success("Whiteboard reset.");
+  }, [saveScene]);
 
   const handleSave = useCallback(async () => {
     await saveScene(true);
@@ -154,10 +179,12 @@ export function WhiteboardTab({ userId, onNewNoteCreated }: WhiteboardTabProps) 
           }
         >
           <ExcalidrawCanvas
-            initialScene={initialScene ?? {}}
+            key={canvasKey}
+            initialScene={initialScene ?? EMPTY_WHITEBOARD_SCENE}
             onChange={handleChange}
             onSave={handleSave}
             onExportToNote={handleExportToNote}
+            onReset={handleReset}
             onMenuOpenChange={setMenuOpen}
             isMobile={isMobile}
           />

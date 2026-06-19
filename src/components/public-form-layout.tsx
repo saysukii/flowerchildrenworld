@@ -24,11 +24,11 @@ export function PublicFormLayout({
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex flex-col">
       {/* Header */}
-      <header className="px-4 sm:px-8 pt-4 pb-0 flex items-center justify-start">
+      <header className="flex items-center justify-center px-4 pb-0 pt-4 sm:px-8">
         <img
           src={fcwFullLogo.url}
           alt="Flower Children World"
-          className="h-auto max-w-[140px] w-auto"
+          className="h-auto w-auto max-w-[140px]"
         />
       </header>
 

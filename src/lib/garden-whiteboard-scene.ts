@@ -1,8 +1,47 @@
 import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
+import { normalizeHex } from "@/lib/brand-colors";
 import type { ExcalidrawApi } from "@/lib/garden-whiteboard-types";
 
 export const WHITEBOARD_STROKE_WIDTHS = [1, 2, 4] as const;
 export type WhiteboardStrokeWidth = (typeof WHITEBOARD_STROKE_WIDTHS)[number];
+
+const DEFAULT_STROKE = "#1E1E1E";
+const DEFAULT_FILL = "#FFC9C9";
+
+export function isTransparentWhiteboardColor(color: string | undefined): boolean {
+  if (!color) return true;
+  const value = color.toLowerCase().trim();
+  return value === "transparent" || value === "none";
+}
+
+export function isValidWhiteboardHex(color: string | undefined): color is string {
+  return typeof color === "string" && /^#[0-9A-Fa-f]{6}$/.test(color);
+}
+
+export function toWhiteboardHex(color: string | undefined, fallback: string): string {
+  if (isValidWhiteboardHex(color)) return color.toUpperCase();
+  if (color && !isTransparentWhiteboardColor(color)) {
+    const normalized = normalizeHex(color.startsWith("#") ? color : `#${color}`);
+    if (/^#[0-9A-F]{6}$/.test(normalized)) return normalized;
+  }
+  return fallback.toUpperCase();
+}
+
+/** Swatch color for the toolbar — prefers visible stroke, then fill. */
+export function resolveWhiteboardToolbarColor(
+  strokeColor: string,
+  fillColor: string,
+  preview: string | null = null,
+): string {
+  if (preview) return toWhiteboardHex(preview, DEFAULT_STROKE);
+  if (!isTransparentWhiteboardColor(strokeColor)) {
+    return toWhiteboardHex(strokeColor, DEFAULT_STROKE);
+  }
+  if (!isTransparentWhiteboardColor(fillColor)) {
+    return toWhiteboardHex(fillColor, DEFAULT_FILL);
+  }
+  return DEFAULT_STROKE;
+}
 
 type WhiteboardStyleUpdate = {
   currentItemStrokeColor?: string;
@@ -110,12 +149,19 @@ export function readWhiteboardStrokeColor(
     const colors = selected
       .filter((el) => elementHasStrokeColor(el.type))
       .map((el) => el.strokeColor)
-      .filter((color): color is string => typeof color === "string" && color.length > 0);
-    if (colors.length > 0) return colors[0];
+      .filter(
+        (color): color is string =>
+          typeof color === "string" &&
+          color.length > 0 &&
+          !isTransparentWhiteboardColor(color),
+      );
+    if (colors.length > 0) return toWhiteboardHex(colors[0], fallback);
   }
 
   const current = appState.currentItemStrokeColor;
-  return typeof current === "string" ? current : fallback;
+  return typeof current === "string"
+    ? toWhiteboardHex(current, fallback)
+    : fallback;
 }
 
 export function readWhiteboardFillColor(
@@ -130,12 +176,20 @@ export function readWhiteboardFillColor(
     );
     const colors = selected
       .map((el) => el.backgroundColor)
-      .filter((color): color is string => typeof color === "string" && color.length > 0);
-    if (colors.length > 0) return colors[0];
+      .filter(
+        (color): color is string =>
+          typeof color === "string" &&
+          color.length > 0 &&
+          !isTransparentWhiteboardColor(color),
+      );
+    if (colors.length > 0) return toWhiteboardHex(colors[0], fallback);
   }
 
   const current = appState.currentItemBackgroundColor;
-  return typeof current === "string" ? current : fallback;
+  if (typeof current === "string" && !isTransparentWhiteboardColor(current)) {
+    return toWhiteboardHex(current, fallback);
+  }
+  return fallback;
 }
 
 export function readWhiteboardStrokeWidth(

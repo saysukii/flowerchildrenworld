@@ -1,11 +1,18 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Loader2 } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
+import { ProfileAvatar } from "@/components/profile-avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +43,13 @@ import {
   GOOGLE_INTEGRATION_SCOPES,
   googleIntegrationFromSession,
 } from "@/lib/google";
+import {
+  fileToAvatarDataUrl,
+  resolveAvatarUrl,
+  saveUserProfile,
+} from "@/lib/user-profile";
+import { fetchStripeIntegrationStatus, disconnectStripeConnect, startStripeConnect } from "@/lib/api/stripe.functions";
+import type { StripeIntegrationStatus } from "@/lib/stripe-analytics";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -81,43 +95,80 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function StatusBadge({ connected }: { connected: boolean }) {
+function StatusBadge({
+  connected,
+  onDisconnect,
+}: {
+  connected: boolean;
+  onDisconnect?: () => void;
+}) {
+  const className = "inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-light";
+  const style = {
+    background: connected ? "rgba(58,184,25,0.12)" : "rgba(0,0,0,0.05)",
+    color: connected ? GREEN : "rgba(2,2,2,0.5)",
+  };
+
+  if (connected && onDisconnect) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={`${className} cursor-pointer items-center gap-1 transition-opacity hover:opacity-75`}
+            style={style}
+          >
+            Connected
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="min-w-[7.5rem] rounded-xl border-black/5 bg-white p-1 shadow-md"
+        >
+          <DropdownMenuItem
+            onClick={onDisconnect}
+            className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-light text-[#C53D3D] focus:bg-[#C53D3D]/5 focus:text-[#C53D3D]"
+          >
+            Disconnect
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
   return (
-    <span
-      className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-light"
-      style={{
-        background: connected ? "rgba(58,184,25,0.12)" : "rgba(0,0,0,0.05)",
-        color: connected ? GREEN : "rgba(2,2,2,0.5)",
-      }}
-    >
+    <span className={className} style={style}>
       {connected ? "Connected" : "Disconnected"}
     </span>
   );
 }
 
 function SettingsPage() {
-  const navigate = useNavigate();
   const [ready, setReady] = useState(false);
   const [admin, setAdmin] = useState(false);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [sendingReset, setSendingReset] = useState(false);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null);
   const [integrations, setIntegrations] = useState<IntegrationsConfig>(() => loadIntegrations());
-  const [connectingNotion, setConnectingNotion] = useState(false);
-  const [connectingLuma, setConnectingLuma] = useState(false);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
-  const [googleHasApiAccess, setGoogleHasApiAccess] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
-  const [signOutAllOpen, setSignOutAllOpen] = useState(false);
-  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [stripeStatus, setStripeStatus] = useState<StripeIntegrationStatus>({
+    connected: false,
+    configured: false,
+    accountName: "",
+    setupIssues: [],
+  });
 
   const syncGoogleIntegration = useCallback((session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"]) => {
     const google = googleIntegrationFromSession(session);
-    setGoogleHasApiAccess(google.hasApiAccess);
     setIntegrations((prev) => {
       const next = {
         ...prev,
@@ -133,15 +184,30 @@ function SettingsPage() {
     return google;
   }, []);
 
+  const refreshStripeStatus = useCallback(async () => {
+    try {
+      const status = await fetchStripeIntegrationStatus();
+      setStripeStatus(status);
+      return status;
+    } catch (error) {
+      console.error(error);
+      setStripeStatus({ connected: false, configured: false, accountName: "", setupIssues: [] });
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getSession();
       const user = data.session?.user;
+      let userIsAdmin = false;
       if (user?.email) {
         setEmail(user.email);
+        setUserId(user.id);
         const name = getDisplayName(user);
         setDisplayName(name);
-        const userIsAdmin = isAdmin(user);
+        setAvatarUrl(resolveAvatarUrl(user.id, user));
+        userIsAdmin = isAdmin(user);
         setAdmin(userIsAdmin);
         setTeam(seedTeamForUser(user.email, name, userIsAdmin));
       } else {
@@ -149,6 +215,9 @@ function SettingsPage() {
       }
       setIntegrations(loadIntegrations());
       syncGoogleIntegration(data.session);
+      if (userIsAdmin) {
+        void refreshStripeStatus();
+      }
       setReady(true);
     })();
 
@@ -161,7 +230,45 @@ function SettingsPage() {
     });
 
     return () => authListener.subscription.unsubscribe();
-  }, [syncGoogleIntegration]);
+  }, [syncGoogleIntegration, refreshStripeStatus]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stripeResult = params.get("stripe");
+    if (!stripeResult) return;
+
+    if (stripeResult === "connected") {
+      toast.success("Stripe connected for donation analytics.");
+      void refreshStripeStatus();
+    } else if (stripeResult === "error") {
+      toast.error("Stripe connection failed. Try again.");
+    }
+
+    window.history.replaceState({}, "", "/settings");
+  }, [refreshStripeStatus]);
+
+  async function handlePhotoChange(file: File | null) {
+    if (!file || !userId) return;
+    setUploadingPhoto(true);
+    try {
+      const dataUrl = await fileToAvatarDataUrl(file);
+      saveUserProfile(userId, { avatarUrl: dataUrl });
+      setAvatarUrl(dataUrl);
+      toast.success("Profile photo updated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update photo.");
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }
+
+  function removePhoto() {
+    if (!userId) return;
+    saveUserProfile(userId, { avatarUrl: null });
+    setAvatarUrl(null);
+    toast.success("Profile photo removed.");
+  }
 
   const persistTeam = useCallback((members: TeamMember[]) => {
     setTeam(members);
@@ -216,46 +323,6 @@ function SettingsPage() {
     toast.success("Member removed.");
   }
 
-  async function connectNotion() {
-    setConnectingNotion(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const next = {
-      ...integrations,
-      notion: { connected: true, accountName: "Flower Children World" },
-    };
-    setIntegrations(next);
-    saveIntegrations(next);
-    setConnectingNotion(false);
-    toast.success("Notion connected.");
-  }
-
-  function disconnectNotion() {
-    const next = { ...integrations, notion: { connected: false, accountName: "" } };
-    setIntegrations(next);
-    saveIntegrations(next);
-    toast.success("Notion disconnected.");
-  }
-
-  async function connectLuma() {
-    setConnectingLuma(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const next = {
-      ...integrations,
-      luma: { connected: true, accountName: displayName || "Luma account" },
-    };
-    setIntegrations(next);
-    saveIntegrations(next);
-    setConnectingLuma(false);
-    toast.success("Luma connected.");
-  }
-
-  function disconnectLuma() {
-    const next = { ...integrations, luma: { connected: false, accountName: "" } };
-    setIntegrations(next);
-    saveIntegrations(next);
-    toast.success("Luma disconnected.");
-  }
-
   async function connectGoogle() {
     setConnectingGoogle(true);
     const { error } = await supabase.auth.signInWithOAuth({
@@ -279,42 +346,46 @@ function SettingsPage() {
     const next = { ...integrations, google: { connected: false, accountName: "", spreadsheetId: "" } };
     setIntegrations(next);
     saveIntegrations(next);
-    setGoogleHasApiAccess(false);
     toast.success("Google disconnected in this workspace.");
   }
 
   async function connectStripe() {
+    if (!stripeStatus.configured) {
+      toast.error(
+        stripeStatus.setupIssues.length > 0
+          ? `Stripe is not ready yet. Add ${stripeStatus.setupIssues.join(", ")} to your server environment and restart the dev server.`
+          : "Stripe is not ready yet. Check server Stripe settings.",
+      );
+      return;
+    }
+
     setConnectingStripe(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const next = {
-      ...integrations,
-      stripe: { connected: true, accountName: "Flower Children World" },
-    };
-    setIntegrations(next);
-    saveIntegrations(next);
-    setConnectingStripe(false);
-    toast.success("Stripe connected for donation tracking.");
+    try {
+      const { url } = await startStripeConnect({ data: { origin: window.location.origin } });
+      window.location.href = url;
+    } catch (error) {
+      console.error(error);
+      setConnectingStripe(false);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not start Stripe connection. Check server Stripe settings.",
+      );
+    }
   }
 
-  function disconnectStripe() {
-    const next = { ...integrations, stripe: { connected: false, accountName: "" } };
-    setIntegrations(next);
-    saveIntegrations(next);
-    toast.success("Stripe disconnected.");
-  }
-
-  function handleSignOutAll() {
-    setSignOutAllOpen(false);
-    toast.success("All team members have been signed out.");
-  }
-
-  async function handleDeleteAccount() {
-    setDeleteAccountOpen(false);
-    await supabase.auth.signOut();
-    localStorage.removeItem("fcw-team-members");
-    localStorage.removeItem("fcw-integrations");
-    toast.success("Account deleted.");
-    navigate({ to: "/auth" });
+  async function disconnectStripe() {
+    setConnectingStripe(true);
+    try {
+      await disconnectStripeConnect();
+      await refreshStripeStatus();
+      toast.success("Stripe disconnected.");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not disconnect Stripe.");
+    } finally {
+      setConnectingStripe(false);
+    }
   }
 
   if (!ready) {
@@ -337,6 +408,40 @@ function SettingsPage() {
         <div className="space-y-8">
           <Section label="Account">
             <div className="space-y-6">
+              <div className="flex items-center justify-between gap-4">
+                <ProfileAvatar name={displayName} avatarUrl={avatarUrl} size="md" />
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => void handlePhotoChange(e.target.files?.[0] ?? null)}
+                />
+                <div className="flex items-center gap-2 text-xs font-light">
+                  <button
+                    type="button"
+                    disabled={uploadingPhoto}
+                    onClick={() => photoInputRef.current?.click()}
+                    className="rounded-full border border-black/10 px-3 py-1.5 text-foreground/70 transition-colors hover:bg-black/5 hover:text-foreground disabled:opacity-50"
+                  >
+                    {uploadingPhoto ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      "Change"
+                    )}
+                  </button>
+                  {avatarUrl ? (
+                    <button
+                      type="button"
+                      onClick={removePhoto}
+                      className="rounded-full px-3 py-1.5 text-foreground/40 transition-colors hover:bg-black/5 hover:text-foreground"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" value={email} readOnly disabled className="bg-foreground/5" />
@@ -443,93 +548,25 @@ function SettingsPage() {
             <Section label="Integrations">
               <div className="space-y-6">
                 <IntegrationCard
-                  title="Notion"
-                  description="Sync Children, Guardians, Volunteers, and Partners databases."
-                  connected={integrations.notion.connected}
-                  accountName={integrations.notion.accountName}
-                  connectLabel="Connect to Notion"
-                  connecting={connectingNotion}
-                  onConnect={connectNotion}
-                  onDisconnect={disconnectNotion}
-                />
-                <IntegrationCard
-                  title="Luma"
-                  description="Pull event data from Luma."
-                  connected={integrations.luma.connected}
-                  accountName={integrations.luma.accountName}
-                  connectLabel="Connect to Luma"
-                  connecting={connectingLuma}
-                  onConnect={connectLuma}
-                  onDisconnect={disconnectLuma}
-                />
-                <IntegrationCard
                   title="Google"
                   description="Calendar sync and Google Sheets import for Community."
                   connected={integrations.google.connected}
                   accountName={integrations.google.accountName}
-                  connectLabel={
-                    integrations.google.connected
-                      ? "Enable Calendar & Sheets access"
-                      : "Connect to Google"
-                  }
+                  connectLabel="Connect to Google"
                   connecting={connectingGoogle}
                   onConnect={connectGoogle}
                   onDisconnect={disconnectGoogle}
-                  connectedNote={
-                    integrations.google.connected && !googleHasApiAccess
-                      ? "Signed in with Google — enable access for Calendar & Sheets."
-                      : integrations.google.connected && googleHasApiAccess
-                        ? "Calendar & Sheets access enabled."
-                        : undefined
-                  }
-                  showConnectWhenConnected={integrations.google.connected && !googleHasApiAccess}
                 />
                 <IntegrationCard
                   title="Stripe"
-                  description="Donation tracking and recurring gifts."
-                  connected={integrations.stripe.connected}
-                  accountName={integrations.stripe.accountName}
+                  description="Donation analytics from your Stripe account."
+                  connected={stripeStatus.connected}
+                  accountName={stripeStatus.accountName}
                   connectLabel="Connect Stripe"
                   connecting={connectingStripe}
                   onConnect={connectStripe}
                   onDisconnect={disconnectStripe}
                 />
-              </div>
-            </Section>
-          )}
-
-          {admin && (
-            <Section label="Danger Zone">
-              <div className="space-y-4">
-                <div className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                  <div>
-                    <p className="text-sm font-normal">Sign out all team members</p>
-                    <p className="text-xs text-foreground/50">Ends every active session for your team.</p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setSignOutAllOpen(true)}
-                    className="rounded-full border-[#C53D3D] text-[#C53D3D] hover:bg-[#C53D3D]/5"
-                  >
-                    Sign out all
-                  </Button>
-                </div>
-
-                <div className="flex flex-col gap-3 rounded-2xl border border-[#C53D3D]/20 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                  <div>
-                    <p className="text-sm font-normal">Delete account</p>
-                    <p className="text-xs text-foreground/50">Permanently remove your account and local data.</p>
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={() => setDeleteAccountOpen(true)}
-                    className="rounded-full text-white hover:opacity-90"
-                    style={{ background: RED }}
-                  >
-                    Delete account
-                  </Button>
-                </div>
               </div>
             </Section>
           )}
@@ -555,48 +592,6 @@ function SettingsPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
-        <AlertDialog open={signOutAllOpen} onOpenChange={setSignOutAllOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="font-normal">Sign out all team members?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Everyone on your team will need to sign in again. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleSignOutAll}
-                className="text-white hover:opacity-90"
-                style={{ background: RED }}
-              >
-                Sign out all
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <AlertDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="font-normal">Delete your account?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will sign you out and remove your local workspace data. This action is permanent.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteAccount}
-                className="text-white hover:opacity-90"
-                style={{ background: RED }}
-              >
-                Delete account
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </AppShell>
   );
@@ -611,8 +606,6 @@ function IntegrationCard({
   connecting,
   onConnect,
   onDisconnect,
-  connectedNote,
-  showConnectWhenConnected = false,
 }: {
   title: string;
   description: string;
@@ -622,8 +615,6 @@ function IntegrationCard({
   connecting: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
-  connectedNote?: string;
-  showConnectWhenConnected?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-black/5 bg-white p-4 sm:p-5">
@@ -632,37 +623,12 @@ function IntegrationCard({
           <p className="text-sm font-normal">{title}</p>
           <p className="text-xs text-foreground/50">{description}</p>
         </div>
-        <StatusBadge connected={connected} />
+        <StatusBadge connected={connected} onDisconnect={connected ? onDisconnect : undefined} />
       </div>
       {connected ? (
-        <div className="mt-4 space-y-3">
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-light text-foreground/70">{accountName}</p>
-              {connectedNote ? (
-                <p className="mt-1 text-xs text-foreground/50">{connectedNote}</p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              onClick={onDisconnect}
-              className="shrink-0 self-start text-xs text-foreground/50 hover:text-foreground sm:self-auto"
-            >
-              Disconnect
-            </button>
-          </div>
-          {showConnectWhenConnected ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onConnect}
-              disabled={connecting}
-              className="rounded-full"
-            >
-              {connecting ? <Loader2 className="size-4 animate-spin" /> : connectLabel}
-            </Button>
-          ) : null}
-        </div>
+        accountName ? (
+          <p className="mt-4 text-sm font-light text-foreground/70">{accountName}</p>
+        ) : null
       ) : (
         <Button
           type="button"

@@ -69,12 +69,7 @@ function GardenPage() {
           <h1 className="mt-1.5 text-xl font-normal leading-tight sm:mt-2 sm:text-2xl md:text-3xl">
             A place to think.
           </h1>
-          <p
-            className={cn(
-              "mt-1.5 text-sm text-foreground/60 sm:mt-2",
-              isWhiteboardMobile && "hidden",
-            )}
-          >
+          <p className="mt-1.5 text-sm text-foreground/60 sm:mt-2">
             Notes, ideas, and sketches — plant something.
           </p>
         </header>
@@ -85,7 +80,7 @@ function GardenPage() {
             isWhiteboardMobile && "mb-3",
           )}
         >
-          <div className="flex gap-2 overflow-x-auto pb-0.5 sm:min-w-0 sm:flex-1">
+          <div className="flex gap-5 overflow-x-auto border-b border-black/5 pb-0 sm:min-w-0 sm:flex-1">
             {TABS.map((t) => {
               const active = tab === t.key;
               return (
@@ -94,10 +89,10 @@ function GardenPage() {
                   type="button"
                   onClick={() => setTab(t.key)}
                   className={cn(
-                    "shrink-0 rounded-full px-4 py-2 text-sm font-light transition-colors whitespace-nowrap",
+                    "relative shrink-0 pb-2.5 text-sm transition-colors whitespace-nowrap",
                     active
-                      ? "bg-foreground text-background"
-                      : "text-foreground/70 hover:bg-black/5",
+                      ? "font-normal text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-foreground"
+                      : "font-light text-foreground/45 hover:text-foreground/70",
                   )}
                 >
                   {t.label}

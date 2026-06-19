@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -8,13 +8,15 @@ import {
   Sprout,
   LogOut,
   Menu,
-  Settings,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import fcwLogo from "@/assets/fcw-flower.png.asset.json";
 import fcwFullLogo from "@/assets/fcw-full-logo.png.asset.json";
+import { ProfileAvatar } from "@/components/profile-avatar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { getDisplayName, getRoleLabel } from "@/lib/user-role";
+import { PROFILE_UPDATED_EVENT, resolveAvatarUrl } from "@/lib/user-profile";
 
 const NAV = [
   { to: "/dashboard", label: "Home", icon: LayoutDashboard },
@@ -22,10 +24,7 @@ const NAV = [
   { to: "/brand-essence", label: "Brand Essence", icon: Sparkles },
   { to: "/garden", label: "The Garden", icon: Sprout },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
-
-const USER = { firstName: "Sukii", role: "Admin" };
 
 function FcwFlowerLogo({ size, alt = "FCW" }: { size: number; alt?: string }) {
   return (
@@ -101,6 +100,54 @@ function SidebarInner({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isSheetRight = variant === "sheet-right";
   const pinUserToBottom = variant === "desktop" || isSheetRight;
+  const [displayName, setDisplayName] = useState("Member");
+  const [roleLabel, setRoleLabel] = useState("Member");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadUser() {
+      const { data } = await supabase.auth.getSession();
+      const user = data.session?.user;
+      if (!active || !user) return;
+
+      setDisplayName(getDisplayName(user));
+      setRoleLabel(getRoleLabel(user));
+      setAvatarUrl(resolveAvatarUrl(user.id, user));
+    }
+
+    void loadUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user;
+      if (!user) return;
+      setDisplayName(getDisplayName(user));
+      setRoleLabel(getRoleLabel(user));
+      setAvatarUrl(resolveAvatarUrl(user.id, user));
+    });
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    function onProfileUpdated(event: Event) {
+      const detail = (event as CustomEvent<{ userId: string }>).detail;
+      if (!detail?.userId) return;
+      void supabase.auth.getSession().then(({ data }) => {
+        const user = data.session?.user;
+        if (user?.id === detail.userId) {
+          setAvatarUrl(resolveAvatarUrl(detail.userId, user));
+        }
+      });
+    }
+
+    window.addEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
+  }, []);
 
   return (
     <div className={cn("flex min-h-0 flex-col", pinUserToBottom && "h-full")}>
@@ -115,7 +162,7 @@ function SidebarInner({
       </div>
 
       <nav className={cn("space-y-1", pinUserToBottom && "flex-1")}>
-        {NAV.map((item) => {
+        {NAV.filter((item) => item.to !== "/settings").map((item) => {
           const active = pathname === item.to || pathname.startsWith(item.to + "/");
           const Icon = item.icon;
           return (
@@ -124,7 +171,7 @@ function SidebarInner({
               href={item.to}
               onClick={onNavigate}
               className={[
-                "flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-light transition-colors",
+                "flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-nohemi-350 transition-colors",
                 active
                   ? "bg-foreground text-background"
                   : "text-foreground/70 hover:bg-black/5 hover:text-foreground",
@@ -142,15 +189,14 @@ function SidebarInner({
           <Link
             to="/settings"
             onClick={onNavigate}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-normal text-white transition-opacity hover:opacity-90"
-            style={{ background: "#3AB819" }}
+            className="shrink-0 transition-opacity hover:opacity-90"
             aria-label="Settings"
           >
-            {USER.firstName.charAt(0)}
+            <ProfileAvatar name={displayName} avatarUrl={avatarUrl} size="sm" />
           </Link>
           <div className="min-w-0 flex-1 -my-1 py-1">
-            <p className="truncate text-sm font-normal leading-tight">{USER.firstName}</p>
-            <p className="text-xs text-foreground/50">{USER.role}</p>
+            <p className="truncate text-sm font-normal leading-tight">{displayName}</p>
+            <p className="text-xs text-foreground/50">{roleLabel}</p>
           </div>
           <button
             aria-label="Sign out"

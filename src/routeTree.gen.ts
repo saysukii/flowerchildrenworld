@@ -24,6 +24,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
 import { Route as AuthenticatedBrandEssenceRouteImport } from './routes/_authenticated/brand-essence'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
+import { Route as ApiStripeCallbackRouteImport } from './routes/api/stripe/callback'
 
 const PartnerRoute = PartnerRouteImport.update({
   id: '/partner',
@@ -101,6 +102,11 @@ const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiStripeCallbackRoute = ApiStripeCallbackRouteImport.update({
+  id: '/api/stripe/callback',
+  path: '/api/stripe/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/api/stripe/callback': typeof ApiStripeCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/api/stripe/callback': typeof ApiStripeCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/api/stripe/callback': typeof ApiStripeCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/routine-pulse'
     | '/settings'
+    | '/api/stripe/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/routine-pulse'
     | '/settings'
+    | '/api/stripe/callback'
   id:
     | '__root__'
     | '/'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/_authenticated/onboarding'
     | '/_authenticated/routine-pulse'
     | '/_authenticated/settings'
+    | '/api/stripe/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -211,6 +223,7 @@ export interface RootRouteChildren {
   EnrollRoute: typeof EnrollRoute
   JoinRoute: typeof JoinRoute
   PartnerRoute: typeof PartnerRoute
+  ApiStripeCallbackRoute: typeof ApiStripeCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -320,6 +333,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/stripe/callback': {
+      id: '/api/stripe/callback'
+      path: '/api/stripe/callback'
+      fullPath: '/api/stripe/callback'
+      preLoaderRoute: typeof ApiStripeCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -357,6 +377,7 @@ const rootRouteChildren: RootRouteChildren = {
   EnrollRoute: EnrollRoute,
   JoinRoute: JoinRoute,
   PartnerRoute: PartnerRoute,
+  ApiStripeCallbackRoute: ApiStripeCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

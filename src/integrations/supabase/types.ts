@@ -68,6 +68,60 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_oauth_states: {
+        Row: {
+          state: string
+          user_id: string
+          redirect_uri: string
+          expires_at: string
+        }
+        Insert: {
+          state: string
+          user_id: string
+          redirect_uri: string
+          expires_at?: string
+        }
+        Update: {
+          state?: string
+          user_id?: string
+          redirect_uri?: string
+          expires_at?: string
+        }
+        Relationships: []
+      }
+      workspace_stripe_connection: {
+        Row: {
+          id: string
+          stripe_user_id: string
+          access_token: string
+          refresh_token: string | null
+          account_name: string
+          connected_by: string | null
+          connected_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          stripe_user_id: string
+          access_token: string
+          refresh_token?: string | null
+          account_name?: string
+          connected_by?: string | null
+          connected_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          stripe_user_id?: string
+          access_token?: string
+          refresh_token?: string | null
+          account_name?: string
+          connected_by?: string | null
+          connected_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -119,14 +119,6 @@ export function NotesTab({ userId, query, refreshKey = 0, savedNote, onOpenNote 
       ) : filtered.length === 0 ? (
         <div className="rounded-3xl bg-black/[0.03] px-6 py-20 text-center">
           <p className="text-sm font-light text-foreground/50">Nothing planted yet. Start with a thought.</p>
-          <button
-            type="button"
-            onClick={() => onOpenNote(null)}
-            className="mt-8 inline-flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform hover:scale-105"
-            aria-label="New note"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
         </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-3 sm:gap-4">
@@ -141,7 +133,7 @@ export function NotesTab({ userId, query, refreshKey = 0, savedNote, onOpenNote 
         </div>
       )}
 
-      {filtered.length > 0 ? (
+      {!loading ? (
         <button
           type="button"
           onClick={() => onOpenNote(null)}

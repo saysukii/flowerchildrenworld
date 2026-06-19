@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { HardDrive, Loader2, Search, Upload } from "lucide-react";
+import { ChevronDown, HardDrive, Loader2, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -190,18 +190,24 @@ export function UploadAssetDialog({
         <div className="space-y-4 py-1">
           <div className="space-y-2">
             <Label htmlFor="asset-category">Category</Label>
-            <select
-              id="asset-category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value as BrandAssetCategory)}
-              className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-light focus:border-foreground/30 focus:outline-none"
-            >
-              {CATEGORIES.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                id="asset-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as BrandAssetCategory)}
+                className="w-full appearance-none rounded-md border border-black/10 bg-white py-2 pl-3 pr-10 text-sm font-light focus:border-foreground/30 focus:outline-none"
+              >
+                {CATEGORIES.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40"
+                aria-hidden
+              />
+            </div>
           </div>
 
           <div className="flex gap-1 rounded-full bg-[#FCFCFC] p-1 border border-black/5">
@@ -214,7 +220,7 @@ export function UploadAssetDialog({
               )}
             >
               <Upload className="h-3.5 w-3.5" />
-              From computer
+              From Device
             </button>
             <button
               type="button"

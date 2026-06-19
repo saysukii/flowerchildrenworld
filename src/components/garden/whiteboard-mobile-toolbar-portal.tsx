@@ -1,11 +1,8 @@
 import { useEffect, type RefObject } from "react";
+import { findExcalidrawToolbarStack } from "@/components/garden/whiteboard-color-toolbar-portal";
 
 const ACTIONS_MOUNT_CLASS = "fcw-mobile-toolbar-actions";
 const LASER_BUTTON_CLASS = "fcw-laser-tool-button";
-
-function getFooterToolButtons(footerContent: Element) {
-  return [...footerContent.querySelectorAll(":scope > button.ToolIcon_type_button")];
-}
 
 function hideExtraToolsMenu(root: HTMLElement) {
   root.querySelectorAll('[data-testid="toolbar-frame"]').forEach((el) => {
@@ -26,43 +23,35 @@ function hideExtraToolsMenu(root: HTMLElement) {
   }
 }
 
-function syncMobileToolbar(root: HTMLElement) {
-  if (!root.querySelector(".excalidraw--mobile")) return;
-
-  hideExtraToolsMenu(root);
-
-  root.querySelectorAll(`.${LASER_BUTTON_CLASS}`).forEach((el) => el.remove());
-
+function hideFooterEditButton(root: HTMLElement) {
   const footerContent = root.querySelector(
     ".App-bottom-bar footer.App-toolbar .App-toolbar-content",
   );
-  const topStack = root.querySelector(
-    ".App-toolbar--mobile .Stack.Stack_horizontal",
-  );
+  if (!footerContent) return;
 
-  if (!footerContent || !topStack) return;
-
-  const [editButton, duplicateButton, deleteButton] = getFooterToolButtons(footerContent);
-
-  if (editButton) {
+  const editButton = footerContent.querySelector("button.ToolIcon_type_button");
+  if (editButton instanceof HTMLElement) {
     editButton.style.display = "none";
   }
+}
 
-  if (!duplicateButton && !deleteButton) return;
+function hideSidebarTrigger(root: HTMLElement) {
+  root.querySelectorAll(".mobile-misc-tools-container").forEach((el) => {
+    (el as HTMLElement).style.display = "none";
+  });
+}
 
-  let mount = topStack.querySelector(`.${ACTIONS_MOUNT_CLASS}`) as HTMLElement | null;
-  if (!mount) {
-    mount = document.createElement("div");
-    mount.className = `${ACTIONS_MOUNT_CLASS} Stack Stack_horizontal`;
-    mount.style.setProperty("--gap", "1");
-    topStack.appendChild(mount);
-  }
+function syncCompactToolbar(root: HTMLElement) {
+  const isCompact = Boolean(root.querySelector(".excalidraw--mobile"));
+  if (!isCompact) return;
 
-  for (const button of [duplicateButton, deleteButton]) {
-    if (button && button.parentElement !== mount) {
-      mount.appendChild(button);
-    }
-  }
+  hideExtraToolsMenu(root);
+  hideFooterEditButton(root);
+  hideSidebarTrigger(root);
+  root.querySelectorAll(`.${LASER_BUTTON_CLASS}`).forEach((el) => el.remove());
+
+  const topStack = findExcalidrawToolbarStack(root);
+  topStack?.querySelector(`.${ACTIONS_MOUNT_CLASS}`)?.remove();
 }
 
 type WhiteboardMobileToolbarPortalProps = {
@@ -73,16 +62,14 @@ export function WhiteboardMobileToolbarPortal({
   containerRef,
 }: WhiteboardMobileToolbarPortalProps) {
   useEffect(() => {
-    const root = containerRef.current;
-    if (!root) return;
+    const el = containerRef.current;
+    if (!el) return;
 
-    syncMobileToolbar(root);
+    const sync = () => syncCompactToolbar(el);
 
-    const observer = new MutationObserver(() => {
-      syncMobileToolbar(root);
-    });
-
-    observer.observe(root, {
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(el, {
       subtree: true,
       childList: true,
       attributes: true,

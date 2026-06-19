@@ -64,9 +64,20 @@ function BrandEssencePage() {
           </p>
         </header>
 
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="-mx-4 sm:mx-0 overflow-x-auto">
-            <div className="flex gap-2 px-4 sm:px-0 min-w-max">
+        <div className="-mx-4 mb-5 overflow-x-auto sm:mx-0">
+          <div className="flex min-w-max items-center gap-2 px-4 sm:w-full sm:min-w-0 sm:px-0">
+            {admin ? (
+              <button
+                type="button"
+                onClick={() => setUploadOpen(true)}
+                aria-label="Upload asset"
+                className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-[#3AB819] transition-colors hover:bg-black/5"
+              >
+                <Upload className="h-4 w-4" />
+              </button>
+            ) : null}
+
+            <div className="flex gap-2">
               {TABS.map((t) => {
                 const isActive = t.key === tab;
                 return (
@@ -86,18 +97,6 @@ function BrandEssencePage() {
               })}
             </div>
           </div>
-
-          {admin ? (
-            <button
-              type="button"
-              onClick={() => setUploadOpen(true)}
-              className="inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-normal text-white transition-opacity hover:opacity-90"
-              style={{ background: "#3AB819" }}
-            >
-              <Upload className="h-4 w-4" />
-              Upload asset
-            </button>
-          ) : null}
         </div>
 
         <section className="rounded-3xl border border-black/5 bg-white px-6 py-8 mb-8">
@@ -108,7 +107,7 @@ function BrandEssencePage() {
                 : `No ${active.key === "all" ? "assets" : active.label.toLowerCase()} yet.`}
             </p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 2xl:grid-cols-3">
               {visibleAssets.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} />
               ))}
@@ -116,11 +115,9 @@ function BrandEssencePage() {
           )}
         </section>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-col gap-5">
           <ColorPaletteCard admin={admin} />
-
           <TypographyCard />
-
           <MissionCard admin={admin} />
         </div>
       </div>
