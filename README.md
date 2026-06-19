@@ -52,13 +52,15 @@ If someone needs to make a flyer, write a caption, or send an email on behalf of
 
 ### Forms (`/forms`)
 
-Three intake forms live at their own URLs and link from your public website:
+Three intake forms live on the public website (not the Inside subdomain):
 
 | Form | URL | Purpose |
 |------|-----|---------|
-| Join the Village | `/join` | Volunteer intake |
-| Partner with Us | `/partner` | Partner inquiries |
-| Enroll a Child | `/enroll` | Child enrollment |
+| Join the Village | `https://flowerchildren.world/join` | Volunteer intake |
+| Partner with Us | `https://flowerchildren.world/partner` | Partner inquiries |
+| Enroll a Child | `https://flowerchildren.world/enroll` | Child enrollment |
+
+Route `/enroll`, `/partner`, and `/join` on `flowerchildren.world` to this app's Railway deployment (same paths). Inside stays at `inside.flowerchildren.world`.
 
 When someone submits, their record is designed to flow straight into **Community** — clean and automatic, with no extra steps for you.
 
@@ -142,7 +144,8 @@ Inside is built around how FCW actually works — not generic software adapted l
 - Sign-in (magic link, password, Google)
 - Community directory (ready for records)
 - Brand Essence (colors, C.A.L.M., mission, asset structure)
-- Public intake forms (`/join`, `/partner`, `/enroll`)
+- Public intake forms (`/join`, `/partner`, `/enroll`) with branded confirmation emails
+- Branded email templates (preview + test send on `/forms`)
 - Analytics dashboard layout
 - The Garden (notes + whiteboard)
 - Routine Pulse (weekly ritual reminders)
@@ -163,6 +166,18 @@ npm start              # run production server locally
 ```
 
 See `.env.example` for required environment variables. Database migrations live in `supabase/migrations/`.
+
+### Email (Resend)
+
+Team invites and form confirmation emails use [Resend](https://resend.com) with HTML templates in `src/emails/templates/`. The black wordmark from Brand Essence (`/brand/fcw-logo-black.png`) is injected as an absolute URL via `APP_ORIGIN`.
+
+1. Create a Resend account and verify your sending domain (e.g. `flowerchildren.world`).
+2. Set `RESEND_API_KEY`, `EMAIL_FROM`, and `APP_ORIGIN` in Railway (and `.env` locally).
+3. Open **Forms** inside the app to preview each template and **Send test to me** before going live.
+4. Team invites from **Settings** use the custom invite template (Supabase generates the link; Resend sends the email).
+5. Public form submissions POST to `/api/forms/submit` and send the matching confirmation to the address on the form.
+
+In Supabase → Authentication → Email Templates, you can disable or simplify the default invite/magic-link templates if you only want the branded Resend emails for team onboarding.
 
 ---
 

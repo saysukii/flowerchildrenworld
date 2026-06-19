@@ -24,7 +24,10 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
 import { Route as AuthenticatedBrandEssenceRouteImport } from './routes/_authenticated/brand-essence'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
+import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
 import { Route as ApiStripeCallbackRouteImport } from './routes/api/stripe/callback'
+import { Route as ApiFormsSubmitRouteImport } from './routes/api/forms/submit'
+import { Route as ApiDonationsCheckoutRouteImport } from './routes/api/donations/checkout'
 
 const PartnerRoute = PartnerRouteImport.update({
   id: '/partner',
@@ -102,9 +105,24 @@ const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiStripeWebhookRoute = ApiStripeWebhookRouteImport.update({
+  id: '/api/stripe/webhook',
+  path: '/api/stripe/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiStripeCallbackRoute = ApiStripeCallbackRouteImport.update({
   id: '/api/stripe/callback',
   path: '/api/stripe/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFormsSubmitRoute = ApiFormsSubmitRouteImport.update({
+  id: '/api/forms/submit',
+  path: '/api/forms/submit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDonationsCheckoutRoute = ApiDonationsCheckoutRouteImport.update({
+  id: '/api/donations/checkout',
+  path: '/api/donations/checkout',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -123,7 +141,10 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/api/donations/checkout': typeof ApiDonationsCheckoutRoute
+  '/api/forms/submit': typeof ApiFormsSubmitRoute
   '/api/stripe/callback': typeof ApiStripeCallbackRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -140,7 +161,10 @@ export interface FileRoutesByTo {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/api/donations/checkout': typeof ApiDonationsCheckoutRoute
+  '/api/forms/submit': typeof ApiFormsSubmitRoute
   '/api/stripe/callback': typeof ApiStripeCallbackRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -159,7 +183,10 @@ export interface FileRoutesById {
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/api/donations/checkout': typeof ApiDonationsCheckoutRoute
+  '/api/forms/submit': typeof ApiFormsSubmitRoute
   '/api/stripe/callback': typeof ApiStripeCallbackRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -178,7 +205,10 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/routine-pulse'
     | '/settings'
+    | '/api/donations/checkout'
+    | '/api/forms/submit'
     | '/api/stripe/callback'
+    | '/api/stripe/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -195,7 +225,10 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/routine-pulse'
     | '/settings'
+    | '/api/donations/checkout'
+    | '/api/forms/submit'
     | '/api/stripe/callback'
+    | '/api/stripe/webhook'
   id:
     | '__root__'
     | '/'
@@ -213,7 +246,10 @@ export interface FileRouteTypes {
     | '/_authenticated/onboarding'
     | '/_authenticated/routine-pulse'
     | '/_authenticated/settings'
+    | '/api/donations/checkout'
+    | '/api/forms/submit'
     | '/api/stripe/callback'
+    | '/api/stripe/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -223,7 +259,10 @@ export interface RootRouteChildren {
   EnrollRoute: typeof EnrollRoute
   JoinRoute: typeof JoinRoute
   PartnerRoute: typeof PartnerRoute
+  ApiDonationsCheckoutRoute: typeof ApiDonationsCheckoutRoute
+  ApiFormsSubmitRoute: typeof ApiFormsSubmitRoute
   ApiStripeCallbackRoute: typeof ApiStripeCallbackRoute
+  ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -333,11 +372,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/stripe/webhook': {
+      id: '/api/stripe/webhook'
+      path: '/api/stripe/webhook'
+      fullPath: '/api/stripe/webhook'
+      preLoaderRoute: typeof ApiStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/stripe/callback': {
       id: '/api/stripe/callback'
       path: '/api/stripe/callback'
       fullPath: '/api/stripe/callback'
       preLoaderRoute: typeof ApiStripeCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/forms/submit': {
+      id: '/api/forms/submit'
+      path: '/api/forms/submit'
+      fullPath: '/api/forms/submit'
+      preLoaderRoute: typeof ApiFormsSubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/donations/checkout': {
+      id: '/api/donations/checkout'
+      path: '/api/donations/checkout'
+      fullPath: '/api/donations/checkout'
+      preLoaderRoute: typeof ApiDonationsCheckoutRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -377,7 +437,10 @@ const rootRouteChildren: RootRouteChildren = {
   EnrollRoute: EnrollRoute,
   JoinRoute: JoinRoute,
   PartnerRoute: PartnerRoute,
+  ApiDonationsCheckoutRoute: ApiDonationsCheckoutRoute,
+  ApiFormsSubmitRoute: ApiFormsSubmitRoute,
   ApiStripeCallbackRoute: ApiStripeCallbackRoute,
+  ApiStripeWebhookRoute: ApiStripeWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -64,11 +64,18 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-export function SubmitButton({ children }: { children: ReactNode }) {
+export function SubmitButton({
+  children,
+  disabled,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="submit"
-      className="w-full rounded-full px-4 py-3 text-sm font-normal text-white transition-opacity hover:opacity-90"
+      disabled={disabled}
+      className="w-full rounded-full px-4 py-3 text-sm font-normal text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       style={{ background: "#3AB819" }}
     >
       {children}
@@ -102,7 +109,12 @@ export function AvailabilityPicker() {
             key={d}
             className="inline-flex shrink-0 items-center gap-1 rounded-full border border-black/10 px-2.5 py-1.5 text-xs font-light cursor-pointer hover:bg-black/5 has-[:checked]:border-[#3AB819] has-[:checked]:bg-[#3AB819]/10 has-[:checked]:text-foreground"
           >
-            <input type="checkbox" className="h-3.5 w-3.5 accent-[#3AB819]" />
+            <input
+              type="checkbox"
+              name="availability"
+              value={d}
+              className="h-3.5 w-3.5 accent-[#3AB819]"
+            />
             {d}
           </label>
         ))}

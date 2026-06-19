@@ -48,6 +48,7 @@ import {
   resolveAvatarUrl,
   saveUserProfile,
 } from "@/lib/user-profile";
+import { sendTeamInviteEmail } from "@/lib/api/email.functions";
 import { fetchStripeIntegrationStatus, disconnectStripeConnect, startStripeConnect } from "@/lib/api/stripe.functions";
 import type { StripeIntegrationStatus } from "@/lib/stripe-analytics";
 
@@ -293,13 +294,13 @@ function SettingsPage() {
       return toast.error("This member is already on the team.");
     }
     setInviting(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email: trimmed,
-      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
-    });
-    if (error) {
+    try {
+      await sendTeamInviteEmail({
+        data: { email: trimmed, origin: window.location.origin },
+      });
+    } catch (err) {
       setInviting(false);
-      return toast.error(error.message);
+      return toast.error(err instanceof Error ? err.message : "Could not send invite.");
     }
     persistTeam([
       ...team,
