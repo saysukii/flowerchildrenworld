@@ -6,11 +6,12 @@ One public domain for everything visitors see. This Cloudflare Worker sits in fr
 |------|---------|
 | `/api/*` | Railway (`inside.flowerchildren.world`) |
 | `/join`, `/partner`, `/enroll` | Railway (intake forms) |
-| Everything else (`/`, `/donate`, etc.) | Framer |
+| `/donate`, `/donate/thank-you` | Railway (donation page) |
+| Everything else (`/`, `/about`, etc.) | Framer |
 
 After this is live:
 
-- Donation widget: `https://flowerchildren.world/api/donations/checkout`
+- Donate page: `https://flowerchildren.world/donate`
 - Form pages: `https://flowerchildren.world/join`, `/partner`, `/enroll`
 - Team portal (unchanged): `https://inside.flowerchildren.world`
 
@@ -67,32 +68,21 @@ www.flowerchildren.world/*
 
 Zone: `flowerchildren.world`
 
-### 5. Update the donation widget
-
-In your Framer embed, set:
-
-```javascript
-const CHECKOUT_API = 'https://flowerchildren.world/api/donations/checkout';
-```
-
-Same-origin — no CORS workarounds needed.
-
-### 6. Verify
+### 5. Verify
 
 ```bash
 # Should hit Railway (not 404 from Framer)
 curl -I https://flowerchildren.world/api/donations/checkout
+curl -I https://flowerchildren.world/join
+curl -I https://flowerchildren.world/donate
+curl -I https://flowerchildren.world/donate/thank-you
 
 # Should return 204 with CORS headers on preflight
 curl -I -X OPTIONS https://flowerchildren.world/api/donations/checkout \
   -H "Origin: https://flowerchildren.world" \
   -H "Access-Control-Request-Method: POST"
 
-# Should serve the volunteer form from Railway
-curl -I https://flowerchildren.world/join
-
 # Should still serve Framer (200, Framer headers)
-curl -I https://flowerchildren.world/donate
 curl -I https://flowerchildren.world/
 ```
 
@@ -118,6 +108,9 @@ Check `PUBLIC_HOST` matches your Framer custom domain exactly (`flowerchildren.w
 
 **`/api/*` still 404**  
 Confirm the Worker route `flowerchildren.world/*` is active and listed above any Page Rules that might override it.
+
+**`/donate` still shows the old Framer page**  
+Redeploy the Worker with the latest `cloudflare/worker.js` (must include `/donate` in `RAILWAY_EXACT_PATHS`), then hard-refresh. You can unpublish Framer’s `/donate` page so it doesn’t linger as a fallback.
 
 **Forms work but donations 503**  
 Railway issue — add `STRIPE_SECRET_KEY` and connect Stripe in Inside → Settings.

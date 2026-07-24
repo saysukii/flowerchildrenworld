@@ -37,6 +37,13 @@ const FORMS = [
     submissionsUrl: "/community",
     accent: "#EFB003",
   },
+  {
+    title: "Donate",
+    path: PUBLIC_FORM_PATHS.donate,
+    subtitle: "Public donation page → Stripe Checkout",
+    submissionsUrl: "/analytics",
+    accent: "#776BD9",
+  },
 ] as const;
 
 function FormsPage() {
@@ -45,9 +52,9 @@ function FormsPage() {
       <div className="mx-auto max-w-5xl">
         <header className="mb-6 sm:mb-8">
           <span className="font-label text-[11px] text-foreground/50">Forms</span>
-          <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">Intake + enrollment</h1>
+          <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">Public forms + donate</h1>
           <p className="mt-2 text-sm text-foreground/60">
-            Three forms — volunteer, partner, and child enrollment. Submissions flow directly into Community.
+            Volunteer, partner, and enrollment flow into Community. Donations go through Stripe Checkout and show in Analytics.
           </p>
         </header>
 
@@ -83,14 +90,14 @@ function FormsPage() {
                   className="inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-normal text-white transition-opacity hover:opacity-90"
                   style={{ background: "#3AB819" }}
                 >
-                  View form
+                  {f.path === PUBLIC_FORM_PATHS.donate ? "View page" : "View form"}
                   <ArrowUpRight className="h-4 w-4" />
                 </a>
                 <a
                   href={f.submissionsUrl}
                   className="inline-flex items-center justify-center rounded-full border border-black/10 px-4 py-2 text-sm font-light text-foreground/80 hover:bg-black/5"
                 >
-                  View submissions
+                  {f.path === PUBLIC_FORM_PATHS.donate ? "View analytics" : "View submissions"}
                 </a>
               </div>
             </section>

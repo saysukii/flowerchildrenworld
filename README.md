@@ -58,17 +58,18 @@ If someone needs to make a flyer, write a caption, or send an email on behalf of
 
 ### Forms (`/forms`)
 
-Three intake forms live on the public website (not the Inside subdomain):
+Public pages live on the main website (not the Inside subdomain), served by this app via Cloudflare → Railway:
 
-| Form | URL | Purpose |
+| Page | URL | Purpose |
 |------|-----|---------|
 | Join the Village | `https://flowerchildren.world/join` | Volunteer intake |
 | Partner with Us | `https://flowerchildren.world/partner` | Partner inquiries |
 | Enroll a Child | `https://flowerchildren.world/enroll` | Child enrollment |
+| Donate | `https://flowerchildren.world/donate` | Donation → Stripe Checkout |
 
-Route `/enroll`, `/partner`, and `/join` on `flowerchildren.world` to this app's Railway deployment (same paths). Inside stays at `inside.flowerchildren.world`.
+Route `/enroll`, `/partner`, `/join`, and `/donate` on `flowerchildren.world` to this app's Railway deployment (same paths). Inside stays at `inside.flowerchildren.world`.
 
-When someone submits, their record is designed to flow straight into **Community** — clean and automatic, with no extra steps for you.
+When someone submits an intake form, their record is designed to flow straight into **Community**. Donations redirect to Stripe Checkout and return to `/donate/thank-you`.
 
 ### Analytics (`/analytics`)
 
@@ -154,7 +155,7 @@ Inside is built around how FCW actually works — not generic software adapted l
 - Public intake forms (`/join`, `/partner`, `/enroll`) with branded confirmation emails
 - Branded email templates (preview + test send on `/forms`)
 - Analytics dashboard layout + Stripe donation totals when Connect is linked
-- Public donation checkout via Stripe (`/api/donations/checkout`)
+- Public donate page (`/donate`) + Stripe Checkout (`/api/donations/checkout`)
 - The Garden (notes + whiteboard)
 - Routine Pulse (weekly ritual reminders)
 - Team settings, invites, and Stripe Connect / Google integrations
@@ -174,8 +175,8 @@ Related (already in use for the public site):
 
 | Service | What it’s for |
 |---------|----------------|
-| **Framer** | Public marketing site at `flowerchildren.world` (including donate page UI). |
-| **Cloudflare** | Worker in front of `flowerchildren.world` that routes marketing pages to Framer and `/join`, `/partner`, `/enroll`, `/api/*` to Railway. See [`cloudflare/README.md`](cloudflare/README.md). |
+| **Framer** | Public marketing site at `flowerchildren.world` (homepage, about, etc.). |
+| **Cloudflare** | Worker in front of `flowerchildren.world` that routes marketing pages to Framer and `/join`, `/partner`, `/enroll`, `/donate`, `/api/*` to Railway. See [`cloudflare/README.md`](cloudflare/README.md). |
 | **Resend** | Branded transactional email (team invites + form confirmations). |
 | **Stripe** | Donations (Checkout) and Connect for Analytics totals. |
 
@@ -201,10 +202,11 @@ The public marketing site lives on **Framer**. Forms, donations, and webhooks ru
 
 See [`cloudflare/README.md`](cloudflare/README.md) for the worker script and setup steps. After it’s live:
 
-- `flowerchildren.world/donate` → Framer
+- `flowerchildren.world/donate`, `/donate/thank-you` → Railway donation page
 - `flowerchildren.world/join`, `/partner`, `/enroll` → Railway forms
 - `flowerchildren.world/api/*` → Railway API (donations, form submit, Stripe webhook)
 - `inside.flowerchildren.world` → team portal only
+- Everything else on `flowerchildren.world` → Framer
 
 ### Stripe Connect (donations + Analytics)
 

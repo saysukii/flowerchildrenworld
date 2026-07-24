@@ -5,6 +5,7 @@ export const PUBLIC_FORM_PATHS = {
   join: "/join",
   partner: "/partner",
   enroll: "/enroll",
+  donate: "/donate",
 } as const;
 
 export type PublicFormKey = keyof typeof PUBLIC_FORM_PATHS;

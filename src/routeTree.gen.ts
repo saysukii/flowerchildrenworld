@@ -12,9 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as PartnerRouteImport } from './routes/partner'
 import { Route as JoinRouteImport } from './routes/join'
 import { Route as EnrollRouteImport } from './routes/enroll'
+import { Route as DonateRouteImport } from './routes/donate'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DonateThankYouRouteImport } from './routes/donate.thank-you'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedRoutinePulseRouteImport } from './routes/_authenticated/routine-pulse'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
@@ -45,6 +47,11 @@ const EnrollRoute = EnrollRouteImport.update({
   path: '/enroll',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DonateRoute = DonateRouteImport.update({
+  id: '/donate',
+  path: '/donate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -58,6 +65,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DonateThankYouRoute = DonateThankYouRouteImport.update({
+  id: '/thank-you',
+  path: '/thank-you',
+  getParentRoute: () => DonateRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
@@ -135,6 +147,7 @@ const ApiDonationsCheckoutRoute = ApiDonationsCheckoutRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/donate': typeof DonateRouteWithChildren
   '/enroll': typeof EnrollRoute
   '/join': typeof JoinRoute
   '/partner': typeof PartnerRoute
@@ -148,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/donate/thank-you': typeof DonateThankYouRoute
   '/api/donations/checkout': typeof ApiDonationsCheckoutRoute
   '/api/forms/submit': typeof ApiFormsSubmitRoute
   '/api/stripe/callback': typeof ApiStripeCallbackRoute
@@ -156,6 +170,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/donate': typeof DonateRouteWithChildren
   '/enroll': typeof EnrollRoute
   '/join': typeof JoinRoute
   '/partner': typeof PartnerRoute
@@ -169,6 +184,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/donate/thank-you': typeof DonateThankYouRoute
   '/api/donations/checkout': typeof ApiDonationsCheckoutRoute
   '/api/forms/submit': typeof ApiFormsSubmitRoute
   '/api/stripe/callback': typeof ApiStripeCallbackRoute
@@ -179,6 +195,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/donate': typeof DonateRouteWithChildren
   '/enroll': typeof EnrollRoute
   '/join': typeof JoinRoute
   '/partner': typeof PartnerRoute
@@ -192,6 +209,7 @@ export interface FileRoutesById {
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/donate/thank-you': typeof DonateThankYouRoute
   '/api/donations/checkout': typeof ApiDonationsCheckoutRoute
   '/api/forms/submit': typeof ApiFormsSubmitRoute
   '/api/stripe/callback': typeof ApiStripeCallbackRoute
@@ -202,6 +220,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/donate'
     | '/enroll'
     | '/join'
     | '/partner'
@@ -215,6 +234,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/routine-pulse'
     | '/settings'
+    | '/donate/thank-you'
     | '/api/donations/checkout'
     | '/api/forms/submit'
     | '/api/stripe/callback'
@@ -223,6 +243,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/donate'
     | '/enroll'
     | '/join'
     | '/partner'
@@ -236,6 +257,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/routine-pulse'
     | '/settings'
+    | '/donate/thank-you'
     | '/api/donations/checkout'
     | '/api/forms/submit'
     | '/api/stripe/callback'
@@ -245,6 +267,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/donate'
     | '/enroll'
     | '/join'
     | '/partner'
@@ -258,6 +281,7 @@ export interface FileRouteTypes {
     | '/_authenticated/onboarding'
     | '/_authenticated/routine-pulse'
     | '/_authenticated/settings'
+    | '/donate/thank-you'
     | '/api/donations/checkout'
     | '/api/forms/submit'
     | '/api/stripe/callback'
@@ -268,6 +292,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  DonateRoute: typeof DonateRouteWithChildren
   EnrollRoute: typeof EnrollRoute
   JoinRoute: typeof JoinRoute
   PartnerRoute: typeof PartnerRoute
@@ -300,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EnrollRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/donate': {
+      id: '/donate'
+      path: '/donate'
+      fullPath: '/donate'
+      preLoaderRoute: typeof DonateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -320,6 +352,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/donate/thank-you': {
+      id: '/donate/thank-you'
+      path: '/thank-you'
+      fullPath: '/donate/thank-you'
+      preLoaderRoute: typeof DonateThankYouRouteImport
+      parentRoute: typeof DonateRoute
     }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
@@ -451,10 +490,22 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface DonateRouteChildren {
+  DonateThankYouRoute: typeof DonateThankYouRoute
+}
+
+const DonateRouteChildren: DonateRouteChildren = {
+  DonateThankYouRoute: DonateThankYouRoute,
+}
+
+const DonateRouteWithChildren =
+  DonateRoute._addFileChildren(DonateRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  DonateRoute: DonateRouteWithChildren,
   EnrollRoute: EnrollRoute,
   JoinRoute: JoinRoute,
   PartnerRoute: PartnerRoute,

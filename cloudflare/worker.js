@@ -8,6 +8,7 @@
  *   /join            volunteer intake
  *   /partner         partner intake
  *   /enroll          child enrollment
+ *   /donate          donation page (+ /donate/thank-you)
  *
  * Env vars (Cloudflare Worker → Settings → Variables):
  *   RAILWAY_ORIGIN   default: https://inside.flowerchildren.world
@@ -19,7 +20,13 @@ const DEFAULT_RAILWAY_ORIGIN = "https://inside.flowerchildren.world";
 const DEFAULT_FRAMER_ORIGIN = "https://sites.framer.app";
 const DEFAULT_PUBLIC_HOST = "flowerchildren.world";
 
-const RAILWAY_EXACT_PATHS = new Set(["/join", "/partner", "/enroll"]);
+const RAILWAY_EXACT_PATHS = new Set([
+  "/join",
+  "/partner",
+  "/enroll",
+  "/donate",
+  "/donate/thank-you",
+]);
 
 function normalizePath(pathname) {
   if (pathname.length > 1 && pathname.endsWith("/")) {
