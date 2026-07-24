@@ -18,6 +18,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedRoutinePulseRouteImport } from './routes/_authenticated/routine-pulse'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
+import { Route as AuthenticatedMessagesRouteImport } from './routes/_authenticated/messages'
 import { Route as AuthenticatedGardenRouteImport } from './routes/_authenticated/garden'
 import { Route as AuthenticatedFormsRouteImport } from './routes/_authenticated/forms'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -72,6 +73,11 @@ const AuthenticatedRoutinePulseRoute =
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMessagesRoute = AuthenticatedMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedGardenRoute = AuthenticatedGardenRouteImport.update({
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/forms': typeof AuthenticatedFormsRoute
   '/garden': typeof AuthenticatedGardenRoute
+  '/messages': typeof AuthenticatedMessagesRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/forms': typeof AuthenticatedFormsRoute
   '/garden': typeof AuthenticatedGardenRoute
+  '/messages': typeof AuthenticatedMessagesRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -180,6 +188,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/forms': typeof AuthenticatedFormsRoute
   '/_authenticated/garden': typeof AuthenticatedGardenRoute
+  '/_authenticated/messages': typeof AuthenticatedMessagesRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -202,6 +211,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/forms'
     | '/garden'
+    | '/messages'
     | '/onboarding'
     | '/routine-pulse'
     | '/settings'
@@ -222,6 +232,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/forms'
     | '/garden'
+    | '/messages'
     | '/onboarding'
     | '/routine-pulse'
     | '/settings'
@@ -243,6 +254,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/forms'
     | '/_authenticated/garden'
+    | '/_authenticated/messages'
     | '/_authenticated/onboarding'
     | '/_authenticated/routine-pulse'
     | '/_authenticated/settings'
@@ -330,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/messages': {
+      id: '/_authenticated/messages'
+      path: '/messages'
+      fullPath: '/messages'
+      preLoaderRoute: typeof AuthenticatedMessagesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/garden': {
       id: '/_authenticated/garden'
       path: '/garden'
@@ -410,6 +429,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedFormsRoute: typeof AuthenticatedFormsRoute
   AuthenticatedGardenRoute: typeof AuthenticatedGardenRoute
+  AuthenticatedMessagesRoute: typeof AuthenticatedMessagesRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedRoutinePulseRoute: typeof AuthenticatedRoutinePulseRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -422,6 +442,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedFormsRoute: AuthenticatedFormsRoute,
   AuthenticatedGardenRoute: AuthenticatedGardenRoute,
+  AuthenticatedMessagesRoute: AuthenticatedMessagesRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedRoutinePulseRoute: AuthenticatedRoutinePulseRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,

@@ -38,7 +38,14 @@ import {
   saveIntegrations,
 } from "@/lib/integrations-config";
 import { loadTeamMembers, saveTeamMembers, seedTeamForUser, type TeamMember } from "@/lib/team-members";
+import {
+  CONTROLLABLE_PAGES,
+  loadMemberPageAccess,
+  saveMemberPageAccess,
+  type PageKey,
+} from "@/lib/page-access";
 import { getDisplayName, isAdmin } from "@/lib/user-role";
+
 import {
   GOOGLE_INTEGRATION_SCOPES,
   googleIntegrationFromSession,
@@ -155,6 +162,7 @@ function SettingsPage() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [sendingReset, setSendingReset] = useState(false);
   const [team, setTeam] = useState<TeamMember[]>([]);
+  const [memberPages, setMemberPages] = useState<PageKey[]>(() => loadMemberPageAccess());
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null);
@@ -215,6 +223,7 @@ function SettingsPage() {
         setTeam(loadTeamMembers());
       }
       setIntegrations(loadIntegrations());
+      setMemberPages(loadMemberPageAccess());
       syncGoogleIntegration(data.session);
       if (userIsAdmin) {
         void refreshStripeStatus();
@@ -275,6 +284,15 @@ function SettingsPage() {
     setTeam(members);
     saveTeamMembers(members);
   }, []);
+
+  function toggleMemberPage(key: PageKey) {
+    if (key === "dashboard") return;
+    setMemberPages((prev) => {
+      const next = prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key];
+      saveMemberPageAccess(next);
+      return loadMemberPageAccess();
+    });
+  }
 
   async function sendResetLink() {
     if (!email) return;
@@ -403,7 +421,7 @@ function SettingsPage() {
         <header className="mb-8">
           <span className="font-label text-[11px] text-foreground/50">Settings</span>
           <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Your workspace</h1>
-          <p className="mt-2 text-sm text-foreground/60">Account, team, integrations, and security.</p>
+          <p className="mt-2 text-sm text-foreground/60">Account, team, page access, integrations, and security.</p>
         </header>
 
         <div className="space-y-8">
@@ -541,6 +559,46 @@ function SettingsPage() {
                   />
                 </div>
                 <SaveButton loading={inviting} onClick={sendInvite} label="Send invite" />
+              </div>
+            </Section>
+          )}
+
+          {admin && (
+            <Section label="Page access">
+              <p className="mb-5 text-sm font-light text-foreground/60">
+                Choose which pages team members can open. Admins always see every page. Home stays on so
+                members can always get back into Inside.
+              </p>
+              <div className="space-y-2 rounded-2xl border border-black/5 bg-white p-2 sm:p-3">
+                {CONTROLLABLE_PAGES.map((page) => {
+                  const checked = memberPages.includes(page.key);
+                  const locked = page.key === "dashboard";
+                  return (
+                    <label
+                      key={page.key}
+                      className={[
+                        "flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition-colors",
+                        locked ? "opacity-70" : "hover:bg-black/[0.03] cursor-pointer",
+                      ].join(" ")}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-normal">{page.label}</p>
+                        <p className="text-[11px] font-light text-foreground/45">
+                          {page.path}
+                          {!page.inNav ? " · linked from elsewhere" : ""}
+                          {locked ? " · always on" : ""}
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={locked}
+                        onChange={() => toggleMemberPage(page.key)}
+                        className="h-4 w-4 accent-[#3AB819]"
+                      />
+                    </label>
+                  );
+                })}
               </div>
             </Section>
           )}

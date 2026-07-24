@@ -51,16 +51,17 @@ export const Route = createFileRoute("/api/donations/checkout")({
 
         const { amount, frequency, first_name, last_name, email } = parsed.data;
 
-        const connection = await loadWorkspaceStripeConnection();
-        if (!connection) {
-          console.error("[Donations] No connected Stripe account found");
-          return jsonResponse({ error: "Donations are not configured yet" }, 503);
-        }
-
         const stripe = createStripePlatformClient();
         if (!stripe) {
           console.error("[Donations] STRIPE_SECRET_KEY is not configured");
           return jsonResponse({ error: "Donations are not configured yet" }, 503);
+        }
+
+        const connection = await loadWorkspaceStripeConnection();
+        if (!connection) {
+          console.warn(
+            "[Donations] No connected Stripe account — creating checkout on platform account. Connect Stripe in Settings so Analytics tracks donations.",
+          );
         }
 
         const isMonthly = frequency === "monthly";
@@ -82,7 +83,7 @@ export const Route = createFileRoute("/api/donations/checkout")({
               success_url: `${ALLOWED_ORIGIN}/donate/thank-you?session_id={CHECKOUT_SESSION_ID}`,
               cancel_url: `${ALLOWED_ORIGIN}/donate`,
             },
-            { stripeAccount: connection.stripeUserId },
+            connection ? { stripeAccount: connection.stripeUserId } : undefined,
           );
 
           return jsonResponse({ url: session.url }, 200);

@@ -1,3 +1,5 @@
+import { isDevMock, MOCK_COMMUNITY_STORE } from "@/lib/dev-mock-data";
+
 export type CommunityTab = "children" | "guardians" | "volunteers" | "partners";
 
 export type ChildRecord = {
@@ -125,9 +127,12 @@ export function loadCommunityStore(): CommunityStore {
   if (typeof window === "undefined") return EMPTY_STORE;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return EMPTY_STORE;
+    if (!raw) {
+      if (isDevMock) return MOCK_COMMUNITY_STORE;
+      return EMPTY_STORE;
+    }
     const parsed = JSON.parse(raw) as Partial<CommunityStore>;
-    return {
+    const store: CommunityStore = {
       children: Array.isArray(parsed.children)
         ? parsed.children.map((child) => ({
             ...child,
@@ -138,9 +143,21 @@ export function loadCommunityStore(): CommunityStore {
       volunteers: Array.isArray(parsed.volunteers) ? parsed.volunteers : [],
       partners: Array.isArray(parsed.partners) ? parsed.partners : [],
     };
+    if (isDevMock && isCommunityStoreEmpty(store)) return MOCK_COMMUNITY_STORE;
+    return store;
   } catch {
+    if (isDevMock) return MOCK_COMMUNITY_STORE;
     return EMPTY_STORE;
   }
+}
+
+function isCommunityStoreEmpty(store: CommunityStore) {
+  return (
+    store.children.length === 0 &&
+    store.guardians.length === 0 &&
+    store.volunteers.length === 0 &&
+    store.partners.length === 0
+  );
 }
 
 export function saveCommunityStore(store: CommunityStore) {

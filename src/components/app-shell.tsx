@@ -1,13 +1,15 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Users,
   Sparkles,
   BarChart3,
   Sprout,
+  MessageCircle,
   LogOut,
   Menu,
+  type LucideIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import fcwLogo from "@/assets/fcw-flower.png.asset.json";
@@ -15,16 +17,23 @@ import fcwFullLogo from "@/assets/fcw-full-logo.png.asset.json";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { getDisplayName, getRoleLabel } from "@/lib/user-role";
+import { getDisplayName, getRoleLabel, isAdmin } from "@/lib/user-role";
 import { PROFILE_UPDATED_EVENT, resolveAvatarUrl } from "@/lib/user-profile";
+import {
+  CONTROLLABLE_PAGES,
+  loadMemberPageAccess,
+  onPageAccessChanged,
+  type PageKey,
+} from "@/lib/page-access";
 
-const NAV = [
-  { to: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { to: "/community", label: "Community", icon: Users },
-  { to: "/brand-essence", label: "Brand Essence", icon: Sparkles },
-  { to: "/garden", label: "The Garden", icon: Sprout },
-  { to: "/analytics", label: "Analytics", icon: BarChart3 },
-] as const;
+const NAV_ICONS: Record<string, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  messages: MessageCircle,
+  community: Users,
+  "brand-essence": Sparkles,
+  garden: Sprout,
+  analytics: BarChart3,
+};
 
 function FcwFlowerLogo({ size, alt = "FCW" }: { size: number; alt?: string }) {
   return (
@@ -103,6 +112,8 @@ function SidebarInner({
   const [displayName, setDisplayName] = useState("Member");
   const [roleLabel, setRoleLabel] = useState("Member");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [admin, setAdmin] = useState(false);
+  const [memberPages, setMemberPages] = useState<PageKey[]>(() => loadMemberPageAccess());
 
   useEffect(() => {
     let active = true;
@@ -115,6 +126,7 @@ function SidebarInner({
       setDisplayName(getDisplayName(user));
       setRoleLabel(getRoleLabel(user));
       setAvatarUrl(resolveAvatarUrl(user.id, user));
+      setAdmin(isAdmin(user));
     }
 
     void loadUser();
@@ -125,12 +137,20 @@ function SidebarInner({
       setDisplayName(getDisplayName(user));
       setRoleLabel(getRoleLabel(user));
       setAvatarUrl(resolveAvatarUrl(user.id, user));
+      setAdmin(isAdmin(user));
     });
 
     return () => {
       active = false;
       authListener.subscription.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    function refreshAccess() {
+      setMemberPages(loadMemberPageAccess());
+    }
+    return onPageAccessChanged(refreshAccess);
   }, []);
 
   useEffect(() => {
@@ -149,6 +169,18 @@ function SidebarInner({
     return () => window.removeEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
   }, []);
 
+  const navItems = useMemo(() => {
+    return CONTROLLABLE_PAGES.filter((page) => {
+      if (!page.inNav) return false;
+      if (admin) return true;
+      return memberPages.includes(page.key);
+    }).map((page) => ({
+      to: page.path,
+      label: page.label,
+      icon: NAV_ICONS[page.key] ?? LayoutDashboard,
+    }));
+  }, [admin, memberPages]);
+
   return (
     <div className={cn("flex min-h-0 flex-col", pinUserToBottom && "h-full")}>
       <div className="mb-8 flex w-full items-center justify-center px-2">
@@ -162,7 +194,7 @@ function SidebarInner({
       </div>
 
       <nav className={cn("space-y-1", pinUserToBottom && "flex-1")}>
-        {NAV.filter((item) => item.to !== "/settings").map((item) => {
+        {navItems.map((item) => {
           const active = pathname === item.to || pathname.startsWith(item.to + "/");
           const Icon = item.icon;
           return (

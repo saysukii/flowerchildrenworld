@@ -3,9 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { fetchStripeDonationAnalytics } from "@/lib/api/stripe.functions";
 import {
+  isDevMock,
+  MOCK_ANALYTICS_GROUPS,
+  MOCK_GROWTH_POINTS,
+  MOCK_STRIPE_DONATIONS,
+} from "@/lib/dev-mock-data";
+import {
   EMPTY_STRIPE_DONATIONS,
   formatRecentDonors,
-  formatRecurringSplit,
   formatStripeMoney,
   type StripeDonationAnalytics,
 } from "@/lib/stripe-analytics";
@@ -117,13 +122,16 @@ function donationsGroup(stripe: StripeDonationAnalytics, loading: boolean): Grou
       },
       {
         label: "Recurring vs one-time",
-        value: formatRecurringSplit(stripe.recurringCount, stripe.oneTimeCount),
-        note: "Active subscriptions vs one-time charges",
+        value: formatRecurringSplitValue(stripe.recurringCount, stripe.oneTimeCount),
+        note: "recurring · one-time",
       },
       {
         label: "Recent donors",
-        value: formatRecentDonors(stripe.recentDonors),
-        note: "Last 10 · name · amount · date",
+        value: stripe.recentDonors.length > 0 ? String(stripe.recentDonors.length) : "—",
+        note:
+          stripe.recentDonors.length > 0
+            ? formatRecentDonors(stripe.recentDonors)
+            : "Last 10 · name · amount · date",
       },
     ],
   };
@@ -131,10 +139,14 @@ function donationsGroup(stripe: StripeDonationAnalytics, loading: boolean): Grou
 
 function AnalyticsPage() {
   const [admin, setAdmin] = useState(false);
-  const [stripe, setStripe] = useState<StripeDonationAnalytics>(EMPTY_STRIPE_DONATIONS);
-  const [loadingStripe, setLoadingStripe] = useState(true);
+  const [stripe, setStripe] = useState<StripeDonationAnalytics>(
+    isDevMock ? MOCK_STRIPE_DONATIONS : EMPTY_STRIPE_DONATIONS,
+  );
+  const [loadingStripe, setLoadingStripe] = useState(!isDevMock);
 
   useEffect(() => {
+    if (isDevMock) return;
+
     void supabase.auth.getUser().then(({ data }) => {
       const userIsAdmin = isAdmin(data.user);
       setAdmin(userIsAdmin);
@@ -154,6 +166,7 @@ function AnalyticsPage() {
   }, []);
 
   const groups = useMemo(() => {
+    if (isDevMock) return MOCK_ANALYTICS_GROUPS;
     const donations = donationsGroup(stripe, admin && loadingStripe);
     return [
       STATIC_GROUPS[0],
@@ -162,6 +175,8 @@ function AnalyticsPage() {
       STATIC_GROUPS[2],
     ];
   }, [admin, loadingStripe, stripe]);
+
+  const growthPolyline = useMemo(() => buildGrowthPolyline(MOCK_GROWTH_POINTS), []);
 
   return (
     <AppShell>
@@ -183,7 +198,7 @@ function AnalyticsPage() {
               >
                 {group.label}
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 [&>*]:h-full">
                 {group.metrics.map((m) => (
                   <MetricCard key={m.label} metric={m} />
                 ))}
@@ -202,19 +217,21 @@ function AnalyticsPage() {
             </div>
             <svg className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
               <polyline
-                points="0,90% 20%,85% 40%,88% 60%,80% 80%,82% 100%,75%"
+                points={isDevMock ? growthPolyline : "0,90% 20%,85% 40%,88% 60%,80% 80%,82% 100%,75%"}
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
-                className="text-foreground/10"
+                className={isDevMock ? "text-[#3AB819]" : "text-foreground/10"}
                 vectorEffect="non-scaling-stroke"
               />
             </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-sm text-foreground/40 text-center">
-                Data will appear as your community grows.
-              </p>
-            </div>
+            {!isDevMock && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <p className="text-sm text-foreground/40 text-center">
+                  Data will appear as your community grows.
+                </p>
+              </div>
+            )}
           </div>
           <div className="mt-2 flex justify-between text-[10px] font-light text-foreground/40 uppercase tracking-wider">
             <span>Jan</span>
@@ -232,10 +249,31 @@ function AnalyticsPage() {
 
 function MetricCard({ metric }: { metric: Metric }) {
   return (
-    <div className="rounded-3xl border border-black/5 bg-white px-5 py-6 sm:px-6 sm:py-7">
-      <p className="text-xs font-light text-foreground/60 leading-snug">{metric.label}</p>
-      <p className="mt-3 text-3xl sm:text-4xl font-normal leading-none">{metric.value}</p>
-      <p className="mt-3 text-[11px] font-light text-foreground/40 leading-snug">{metric.note}</p>
+    <div className="flex h-full flex-col rounded-3xl border border-black/5 bg-white px-5 py-5 sm:px-6 sm:py-6">
+      <p className="min-h-8 text-xs font-light leading-snug text-foreground/60">{metric.label}</p>
+      <p className="mt-2 flex-1 text-2xl font-normal leading-none tabular-nums">{metric.value}</p>
+      <div className="mt-4 flex min-h-10 shrink-0 items-end border-t border-black/5 pt-3">
+        <p className="text-[11px] font-light leading-snug text-foreground/40">{metric.note}</p>
+      </div>
     </div>
   );
+}
+
+function formatRecurringSplitValue(recurringCount: number, oneTimeCount: number) {
+  if (recurringCount === 0 && oneTimeCount === 0) return "—";
+  return `${recurringCount} · ${oneTimeCount}`;
+}
+
+function buildGrowthPolyline(points: number[]) {
+  if (points.length === 0) return "";
+  const max = Math.max(...points);
+  const min = Math.min(...points);
+  const range = max - min || 1;
+  return points
+    .map((value, index) => {
+      const x = (index / (points.length - 1)) * 100;
+      const y = 100 - ((value - min) / range) * 70 - 15;
+      return `${x},${y}`;
+    })
+    .join(" ");
 }

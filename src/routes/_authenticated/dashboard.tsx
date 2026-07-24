@@ -2,6 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
 import { PageLabel } from "@/components/page-label";
+import {
+  isDevMock,
+  MOCK_TODAY_EVENTS,
+  MOCK_UPCOMING_EVENTS,
+  type DashboardEvent,
+} from "@/lib/dev-mock-data";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -36,6 +42,8 @@ function DashboardPage() {
   const now = useMemo(() => new Date(), []);
   const dateLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   const ritual = DAY_RITUALS[now.getDay()];
+  const todayEvents = isDevMock ? MOCK_TODAY_EVENTS : [];
+  const upcomingEvents = isDevMock ? MOCK_UPCOMING_EVENTS : [];
 
   return (
     <AppShell>
@@ -54,9 +62,17 @@ function DashboardPage() {
           <Card>
             <Label>Today</Label>
             <h2 className="mt-2 text-xl font-normal">What's happening</h2>
-            <p className="mt-4 text-sm text-foreground/60 leading-relaxed">
-              Nothing scheduled today — a good day to rest or get ahead.
-            </p>
+            {todayEvents.length > 0 ? (
+              <ul className="mt-4 space-y-3">
+                {todayEvents.map((event) => (
+                  <EventRow key={`${event.title}-${event.time}`} event={event} />
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-foreground/60 leading-relaxed">
+                Nothing scheduled today — a good day to rest or get ahead.
+              </p>
+            )}
           </Card>
 
           <Card>
@@ -76,9 +92,17 @@ function DashboardPage() {
         <Card>
           <Label>This Week</Label>
           <h2 className="mt-2 text-xl font-normal">Upcoming programming</h2>
-          <p className="mt-4 text-sm text-foreground/60 leading-relaxed">
-            Nothing on the calendar yet.
-          </p>
+          {upcomingEvents.length > 0 ? (
+            <ul className="mt-4 space-y-3">
+              {upcomingEvents.map((event) => (
+                <EventRow key={`${event.title}-${event.time}`} event={event} />
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-foreground/60 leading-relaxed">
+              Nothing on the calendar yet.
+            </p>
+          )}
         </Card>
       </div>
     </AppShell>
@@ -95,4 +119,14 @@ function Card({ children }: { children: React.ReactNode }) {
 
 function Label({ children }: { children: React.ReactNode }) {
   return <PageLabel>{children}</PageLabel>;
+}
+
+function EventRow({ event }: { event: DashboardEvent }) {
+  return (
+    <li className="text-sm leading-relaxed">
+      <span className="font-normal">{event.title}</span>
+      <span className="text-foreground/50"> · {event.time}</span>
+      {event.detail ? <p className="mt-0.5 text-foreground/60">{event.detail}</p> : null}
+    </li>
+  );
 }

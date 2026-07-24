@@ -1,0 +1,14 @@
+name = "flowerchildren-router"
+main = "worker.js"
+compatibility_date = "2024-06-01"
+
+# Route must match your public domain. Adjust if you also serve www.
+routes = [
+  { pattern = "flowerchildren.world/*", zone_name = "flowerchildren.world" },
+  { pattern = "www.flowerchildren.world/*", zone_name = "flowerchildren.world" },
+]
+
+[vars]
+RAILWAY_ORIGIN = "https://inside.flowerchildren.world"
+FRAMER_ORIGIN = "https://sites.framer.app"
+PUBLIC_HOST = "flowerchildren.world"

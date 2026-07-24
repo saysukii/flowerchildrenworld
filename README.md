@@ -167,6 +167,17 @@ npm start              # run production server locally
 
 See `.env.example` for required environment variables. Database migrations live in `supabase/migrations/`.
 
+### Public site routing (`flowerchildren.world`)
+
+The public marketing site lives on **Framer**. Forms, donations, and webhooks run on **Railway** (this app). To keep one public URL (`flowerchildren.world`) for everything, put a **Cloudflare Worker** in front of the domain.
+
+See [`cloudflare/README.md`](cloudflare/README.md) for the worker script and setup steps. After it’s live:
+
+- `flowerchildren.world/donate` → Framer
+- `flowerchildren.world/join`, `/partner`, `/enroll` → Railway forms
+- `flowerchildren.world/api/*` → Railway API (donations, form submit, Stripe webhook)
+- `inside.flowerchildren.world` → team portal only
+
 ### Email (Resend)
 
 Team invites and form confirmation emails use [Resend](https://resend.com) with HTML templates in `src/emails/templates/`. The black wordmark from Brand Essence (`/brand/fcw-logo-black.png`) is injected as an absolute URL via `APP_ORIGIN`.
