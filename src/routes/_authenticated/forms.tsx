@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ArrowUpRight, Inbox } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Reveal } from "@/components/motion";
 import { EmailTemplatesPanel } from "@/components/forms/email-templates-panel";
 import { getPublicFormUrl, PUBLIC_FORM_PATHS } from "@/lib/public-forms";
 
@@ -51,12 +52,12 @@ function FormsPage() {
         </header>
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {FORMS.map((f) => {
+          {FORMS.map((f, index) => {
             const publicUrl = getPublicFormUrl(f.path);
             return (
+            <Reveal key={f.path} delayMs={index * 70}>
             <section
-              key={f.path}
-              className="flex flex-col rounded-3xl border border-black/5 bg-white px-6 py-7"
+              className="flex h-full flex-col rounded-3xl border border-black/5 bg-white px-6 py-7"
             >
               <div
                 className="mb-5 grid h-10 w-10 place-items-center rounded-xl"
@@ -93,11 +94,14 @@ function FormsPage() {
                 </a>
               </div>
             </section>
+            </Reveal>
           );
           })}
         </div>
 
-        <EmailTemplatesPanel />
+        <Reveal delayMs={180}>
+          <EmailTemplatesPanel />
+        </Reveal>
       </div>
     </AppShell>
   );

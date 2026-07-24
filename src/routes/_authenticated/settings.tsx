@@ -3,10 +3,19 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
+import { Reveal } from "@/components/motion";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +33,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -40,8 +56,8 @@ import {
 import { loadTeamMembers, saveTeamMembers, seedTeamForUser, type TeamMember } from "@/lib/team-members";
 import {
   CONTROLLABLE_PAGES,
-  loadMemberPageAccess,
-  saveMemberPageAccess,
+  DEFAULT_MEMBER_PAGES,
+  normalizePages,
   type PageKey,
 } from "@/lib/page-access";
 import { getDisplayName, isAdmin } from "@/lib/user-role";
@@ -96,10 +112,12 @@ function SaveButton({
 
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <section className="border-t border-black/5 pt-8 first:border-t-0 first:pt-0">
-      <h2 className="font-label mb-6 text-[11px] text-foreground/50">{label}</h2>
-      {children}
-    </section>
+    <Reveal>
+      <section className="border-t border-black/5 pt-8 first:border-t-0 first:pt-0">
+        <h2 className="font-label mb-6 text-[11px] text-foreground/50">{label}</h2>
+        {children}
+      </section>
+    </Reveal>
   );
 }
 
@@ -162,10 +180,17 @@ function SettingsPage() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [sendingReset, setSendingReset] = useState(false);
   const [team, setTeam] = useState<TeamMember[]>([]);
-  const [memberPages, setMemberPages] = useState<PageKey[]>(() => loadMemberPageAccess());
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [editDraft, setEditDraft] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    role: TeamMember["role"];
+    pages: PageKey[];
+  } | null>(null);
   const [integrations, setIntegrations] = useState<IntegrationsConfig>(() => loadIntegrations());
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
@@ -223,7 +248,6 @@ function SettingsPage() {
         setTeam(loadTeamMembers());
       }
       setIntegrations(loadIntegrations());
-      setMemberPages(loadMemberPageAccess());
       syncGoogleIntegration(data.session);
       if (userIsAdmin) {
         void refreshStripeStatus();
@@ -285,13 +309,62 @@ function SettingsPage() {
     saveTeamMembers(members);
   }, []);
 
-  function toggleMemberPage(key: PageKey) {
-    if (key === "dashboard") return;
-    setMemberPages((prev) => {
-      const next = prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key];
-      saveMemberPageAccess(next);
-      return loadMemberPageAccess();
+  function openMemberEditor(member: TeamMember) {
+    setEditingMember(member);
+    setEditDraft({
+      name: member.name,
+      email: member.email,
+      phone: member.phone,
+      role: member.role,
+      pages: [...member.pages],
     });
+  }
+
+  function closeMemberEditor() {
+    setEditingMember(null);
+    setEditDraft(null);
+  }
+
+  function toggleEditPage(key: PageKey) {
+    if (key === "dashboard" || !editDraft) return;
+    setEditDraft((prev) => {
+      if (!prev) return prev;
+      const next = prev.pages.includes(key)
+        ? prev.pages.filter((p) => p !== key)
+        : [...prev.pages, key];
+      return { ...prev, pages: normalizePages(next) };
+    });
+  }
+
+  function saveMemberEdits() {
+    if (!editingMember || !editDraft) return;
+    const nextEmail = editDraft.email.trim().toLowerCase();
+    if (!editDraft.name.trim()) return toast.error("Name is required.");
+    if (!nextEmail) return toast.error("Email is required.");
+    if (
+      team.some(
+        (m) => m.id !== editingMember.id && m.email.toLowerCase() === nextEmail,
+      )
+    ) {
+      return toast.error("Another member already uses that email.");
+    }
+
+    persistTeam(
+      team.map((m) =>
+        m.id === editingMember.id
+          ? {
+              ...m,
+              name: editDraft.name.trim(),
+              email: nextEmail,
+              phone: editDraft.phone.trim(),
+              role: editDraft.role,
+              pages: normalizePages(editDraft.pages),
+            }
+          : m,
+      ),
+    );
+    closeMemberEditor();
+    toast.success("Member updated.");
   }
 
   async function sendResetLink() {
@@ -324,10 +397,12 @@ function SettingsPage() {
       ...team,
       {
         id: crypto.randomUUID(),
-        name: trimmed.split("@")[0],
+        name: trimmed.split("@")[0] || "Member",
         email: trimmed,
+        phone: "",
         role: "Member",
         status: "Pending",
+        pages: [...DEFAULT_MEMBER_PAGES],
       },
     ]);
     setInviteEmail("");
@@ -337,6 +412,7 @@ function SettingsPage() {
 
   function confirmRemoveMember() {
     if (!removeTarget) return;
+    if (editingMember?.id === removeTarget.id) closeMemberEditor();
     persistTeam(team.filter((m) => m.id !== removeTarget.id));
     setRemoveTarget(null);
     toast.success("Member removed.");
@@ -421,7 +497,7 @@ function SettingsPage() {
         <header className="mb-8">
           <span className="font-label text-[11px] text-foreground/50">Settings</span>
           <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Your workspace</h1>
-          <p className="mt-2 text-sm text-foreground/60">Account, team, page access, integrations, and security.</p>
+          <p className="mt-2 text-sm text-foreground/60">Account, team, integrations, and security.</p>
         </header>
 
         <div className="space-y-8">
@@ -486,29 +562,25 @@ function SettingsPage() {
 
           {admin && (
             <Section label="Team">
+              <p className="mb-5 text-sm font-light text-foreground/60">
+                Click a member to edit their info and page permissions. Auth admins always see every page.
+              </p>
+
               <div className="space-y-3 md:hidden">
                 {team.map((member) => (
-                  <div
+                  <button
                     key={member.id}
-                    className="rounded-2xl border border-black/5 bg-white p-4"
+                    type="button"
+                    onClick={() => openMemberEditor(member)}
+                    className="w-full rounded-2xl border border-black/5 bg-white p-4 text-left transition-colors hover:bg-black/[0.02]"
                   >
                     <p className="text-sm font-normal">{member.name}</p>
                     <p className="mt-1 text-xs font-light text-foreground/60">{member.email}</p>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="text-xs font-light text-foreground/70">
-                        {member.role} · {member.status}
-                      </span>
-                      {member.email.toLowerCase() !== email.toLowerCase() ? (
-                        <button
-                          type="button"
-                          onClick={() => setRemoveTarget(member)}
-                          className="text-xs text-foreground/50 hover:text-foreground"
-                        >
-                          Remove
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
+                    <p className="mt-2 text-xs font-light text-foreground/70">
+                      {member.role} · {member.status}
+                      {member.phone ? ` · ${member.phone}` : ""}
+                    </p>
+                  </button>
                 ))}
               </div>
 
@@ -518,29 +590,25 @@ function SettingsPage() {
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="pl-4">Name</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead>Number</TableHead>
                       <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="pr-4 text-right"> </TableHead>
+                      <TableHead className="pr-4">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {team.map((member) => (
-                      <TableRow key={member.id}>
+                      <TableRow
+                        key={member.id}
+                        className="cursor-pointer"
+                        onClick={() => openMemberEditor(member)}
+                      >
                         <TableCell className="pl-4 font-light">{member.name}</TableCell>
                         <TableCell className="font-light text-foreground/70">{member.email}</TableCell>
-                        <TableCell className="font-light">{member.role}</TableCell>
-                        <TableCell className="font-light">{member.status}</TableCell>
-                        <TableCell className="pr-4 text-right">
-                          {member.email.toLowerCase() !== email.toLowerCase() && (
-                            <button
-                              type="button"
-                              onClick={() => setRemoveTarget(member)}
-                              className="text-xs text-foreground/50 hover:text-foreground"
-                            >
-                              Remove
-                            </button>
-                          )}
+                        <TableCell className="font-light text-foreground/70">
+                          {member.phone || "—"}
                         </TableCell>
+                        <TableCell className="font-light">{member.role}</TableCell>
+                        <TableCell className="pr-4 font-light">{member.status}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -559,46 +627,6 @@ function SettingsPage() {
                   />
                 </div>
                 <SaveButton loading={inviting} onClick={sendInvite} label="Send invite" />
-              </div>
-            </Section>
-          )}
-
-          {admin && (
-            <Section label="Page access">
-              <p className="mb-5 text-sm font-light text-foreground/60">
-                Choose which pages team members can open. Admins always see every page. Home stays on so
-                members can always get back into Inside.
-              </p>
-              <div className="space-y-2 rounded-2xl border border-black/5 bg-white p-2 sm:p-3">
-                {CONTROLLABLE_PAGES.map((page) => {
-                  const checked = memberPages.includes(page.key);
-                  const locked = page.key === "dashboard";
-                  return (
-                    <label
-                      key={page.key}
-                      className={[
-                        "flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition-colors",
-                        locked ? "opacity-70" : "hover:bg-black/[0.03] cursor-pointer",
-                      ].join(" ")}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-normal">{page.label}</p>
-                        <p className="text-[11px] font-light text-foreground/45">
-                          {page.path}
-                          {!page.inNav ? " · linked from elsewhere" : ""}
-                          {locked ? " · always on" : ""}
-                        </p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={locked}
-                        onChange={() => toggleMemberPage(page.key)}
-                        className="h-4 w-4 accent-[#3AB819]"
-                      />
-                    </label>
-                  );
-                })}
               </div>
             </Section>
           )}
@@ -630,6 +658,130 @@ function SettingsPage() {
             </Section>
           )}
         </div>
+
+        <Dialog open={!!editingMember && !!editDraft} onOpenChange={(open) => !open && closeMemberEditor()}>
+          <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="font-normal">Edit team member</DialogTitle>
+              <DialogDescription>
+                Update their details and choose which pages they can open. Home stays on so they can always get back into Inside.
+              </DialogDescription>
+            </DialogHeader>
+
+            {editDraft ? (
+              <div className="space-y-5 py-2">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="member-name">Name</Label>
+                    <Input
+                      id="member-name"
+                      value={editDraft.name}
+                      onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="member-email">Email</Label>
+                    <Input
+                      id="member-email"
+                      type="email"
+                      value={editDraft.email}
+                      onChange={(e) => setEditDraft({ ...editDraft, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="member-phone">Number</Label>
+                    <Input
+                      id="member-phone"
+                      type="tel"
+                      placeholder="(555) 000-0000"
+                      value={editDraft.phone}
+                      onChange={(e) => setEditDraft({ ...editDraft, phone: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="member-role">Role</Label>
+                    <Select
+                      value={editDraft.role}
+                      onValueChange={(value: TeamMember["role"]) =>
+                        setEditDraft({ ...editDraft, role: value })
+                      }
+                    >
+                      <SelectTrigger id="member-role" className="rounded-md">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Member">Member</SelectItem>
+                        <SelectItem value="Admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-normal">Permissions</p>
+                  <p className="mb-3 text-xs font-light text-foreground/50">
+                    {editDraft.role === "Admin"
+                      ? "Workspace Admins always see every page. These still apply if this person signs in as a member."
+                      : "Choose which pages this member can open."}
+                  </p>
+                  <div className="space-y-1 rounded-2xl border border-black/5 bg-background p-2">
+                    {CONTROLLABLE_PAGES.map((page) => {
+                      const checked = editDraft.pages.includes(page.key);
+                      const locked = page.key === "dashboard";
+                      return (
+                        <label
+                          key={page.key}
+                          className={[
+                            "flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 transition-colors",
+                            locked ? "opacity-70" : "cursor-pointer hover:bg-black/[0.03]",
+                          ].join(" ")}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-normal">{page.label}</p>
+                            <p className="text-[11px] font-light text-foreground/45">
+                              {page.path}
+                              {!page.inNav ? " · linked from elsewhere" : ""}
+                              {locked ? " · always on" : ""}
+                            </p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={locked}
+                            onChange={() => toggleEditPage(page.key)}
+                            className="h-4 w-4 accent-[#3AB819]"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+              {editingMember && editingMember.email.toLowerCase() !== email.toLowerCase() ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRemoveTarget(editingMember);
+                  }}
+                  className="order-last text-xs text-foreground/45 hover:text-[#C53D3D] sm:order-first"
+                >
+                  Remove member
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" className="rounded-full" onClick={closeMemberEditor}>
+                  Cancel
+                </Button>
+                <SaveButton onClick={saveMemberEdits} label="Save member" />
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={!!removeTarget} onOpenChange={(o) => !o && setRemoveTarget(null)}>
           <AlertDialogContent>

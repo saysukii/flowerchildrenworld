@@ -139,6 +139,7 @@ export type AnalyticsMetric = {
   label: string;
   value: string;
   note: string;
+  donors?: Array<{ name: string; amountCents: number; currency: string; date: string }>;
 };
 
 export type AnalyticsGroup = {
@@ -148,59 +149,228 @@ export type AnalyticsGroup = {
   metrics: AnalyticsMetric[];
 };
 
-export const MOCK_ANALYTICS_GROUPS: AnalyticsGroup[] = [
-  {
-    key: "community",
-    label: "Community",
-    color: "#3AB819",
-    metrics: [
-      { label: "Total enrolled children", value: "248", note: "Active · all programs" },
-      { label: "Active volunteers", value: "176", note: "Active status in directory" },
-      { label: "Active partners", value: "64", note: "Active status · all types" },
-      { label: "New contacts this month", value: "132", note: "All record types · added this month" },
-    ],
-  },
-  {
-    key: "events",
-    label: "Events",
-    color: "#15AAD2",
-    metrics: [
-      { label: "Upcoming events", value: "12", note: "Next 30 days" },
-      { label: "RSVPs this month", value: "684", note: "Total across all events" },
-      { label: "Most attended recent event", value: "312", note: "Summer Solstice Festival · last 30 days" },
-      { label: "Total events hosted", value: "128", note: "All time" },
-    ],
-  },
-  {
-    key: "donations",
-    label: "Donations",
-    color: "#EFB003",
-    metrics: [
-      { label: "Total donated this month", value: "$28,450", note: "Confirmed charges · mock data" },
-      { label: "Total donated all-time", value: "$214,890", note: "Cumulative · mock data" },
-      { label: "Recurring vs one-time", value: "94 · 318", note: "recurring · one-time" },
-      {
-        label: "Recent donors",
-        value: "8",
-        note: "M.K. · $250 · A.R. · $150 · J.L. · $500 · S.P. · $100 · N.W. · $200 · T.N. · $75 · R.C. · $300 · L.B. · $125",
-      },
-    ],
-  },
-  {
-    key: "engagement",
-    label: "Engagement",
-    color: "#776BD9",
-    metrics: [
-      { label: "Volunteer signups this month", value: "68", note: "/join submissions" },
-      { label: "Partner inquiries this month", value: "31", note: "/partner submissions" },
-      { label: "Child enrollments this month", value: "47", note: "/enroll submissions" },
-      { label: "Community growth", value: "+112%", note: "Total records by month · all time" },
-    ],
-  },
-];
+export const GROWTH_MONTH_LABELS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
 
-/** Monthly community record totals for the growth chart (Jan–Jun). */
-export const MOCK_GROWTH_POINTS = [118, 164, 221, 298, 372, 486];
+/** First year analytics tracking began. Picker only includes this through the current calendar year. */
+const ANALYTICS_START_YEAR = 2026;
+
+/** Years available in the analytics year picker (through the current calendar year). */
+export function getAnalyticsYears(now = new Date()) {
+  const current = now.getFullYear();
+  const start = Math.min(ANALYTICS_START_YEAR, current);
+  const years: number[] = [];
+  for (let year = start; year <= current; year += 1) years.push(year);
+  return years;
+}
+
+const MOCK_ANALYTICS_BY_YEAR: Record<number, AnalyticsGroup[]> = {
+  2024: [
+    {
+      key: "community",
+      label: "Community",
+      color: "#3AB819",
+      metrics: [
+        { label: "Total enrolled children", value: "142", note: "Active · all programs" },
+        { label: "Active volunteers", value: "98", note: "Active status in directory" },
+        { label: "Active partners", value: "31", note: "Active status · all types" },
+        { label: "New contacts this month", value: "54", note: "All record types · Dec 2024" },
+      ],
+    },
+    {
+      key: "events",
+      label: "Events",
+      color: "#15AAD2",
+      metrics: [
+        { label: "Upcoming events", value: "0", note: "Year complete" },
+        { label: "RSVPs this month", value: "210", note: "Dec 2024 · all events" },
+        { label: "Most attended recent event", value: "186", note: "Harvest Festival · 2024" },
+        { label: "Total events hosted", value: "74", note: "2024 total" },
+      ],
+    },
+    {
+      key: "donations",
+      label: "Donations",
+      color: "#EFB003",
+      metrics: [
+        { label: "Total donated this month", value: "$9,820", note: "Dec 2024 · mock data" },
+        { label: "Total donated this year", value: "$96,440", note: "2024 cumulative · mock data" },
+        { label: "Recurring vs one-time", value: "41 · 168", note: "recurring · one-time" },
+        {
+          label: "Recent donors",
+          value: "5",
+          note: "Last 10",
+          donors: [
+            { name: "C.D.", amountCents: 12_000, currency: "usd", date: "2024-12-18" },
+            { name: "E.F.", amountCents: 8_000, currency: "usd", date: "2024-12-12" },
+            { name: "G.H.", amountCents: 25_000, currency: "usd", date: "2024-12-08" },
+            { name: "I.J.", amountCents: 5_000, currency: "usd", date: "2024-12-03" },
+            { name: "K.L.", amountCents: 15_000, currency: "usd", date: "2024-11-28" },
+          ],
+        },
+      ],
+    },
+    {
+      key: "engagement",
+      label: "Engagement",
+      color: "#776BD9",
+      metrics: [
+        { label: "Volunteer signups this month", value: "22", note: "/join · Dec 2024" },
+        { label: "Partner inquiries this month", value: "11", note: "/partner · Dec 2024" },
+        { label: "Child enrollments this month", value: "18", note: "/enroll · Dec 2024" },
+        { label: "Community growth", value: "+64%", note: "2024 year-over-year" },
+      ],
+    },
+  ],
+  2025: [
+    {
+      key: "community",
+      label: "Community",
+      color: "#3AB819",
+      metrics: [
+        { label: "Total enrolled children", value: "196", note: "Active · all programs" },
+        { label: "Active volunteers", value: "138", note: "Active status in directory" },
+        { label: "Active partners", value: "48", note: "Active status · all types" },
+        { label: "New contacts this month", value: "88", note: "All record types · Dec 2025" },
+      ],
+    },
+    {
+      key: "events",
+      label: "Events",
+      color: "#15AAD2",
+      metrics: [
+        { label: "Upcoming events", value: "0", note: "Year complete" },
+        { label: "RSVPs this month", value: "402", note: "Dec 2025 · all events" },
+        { label: "Most attended recent event", value: "248", note: "Winter Circle · 2025" },
+        { label: "Total events hosted", value: "102", note: "2025 total" },
+      ],
+    },
+    {
+      key: "donations",
+      label: "Donations",
+      color: "#EFB003",
+      metrics: [
+        { label: "Total donated this month", value: "$18,260", note: "Dec 2025 · mock data" },
+        { label: "Total donated this year", value: "$154,320", note: "2025 cumulative · mock data" },
+        { label: "Recurring vs one-time", value: "72 · 241", note: "recurring · one-time" },
+        {
+          label: "Recent donors",
+          value: "6",
+          note: "Last 10",
+          donors: [
+            { name: "A.B.", amountCents: 20_000, currency: "usd", date: "2025-12-20" },
+            { name: "C.D.", amountCents: 10_000, currency: "usd", date: "2025-12-14" },
+            { name: "E.F.", amountCents: 40_000, currency: "usd", date: "2025-12-09" },
+            { name: "G.H.", amountCents: 7_500, currency: "usd", date: "2025-12-04" },
+            { name: "I.J.", amountCents: 15_000, currency: "usd", date: "2025-11-29" },
+            { name: "K.L.", amountCents: 12_000, currency: "usd", date: "2025-11-22" },
+          ],
+        },
+      ],
+    },
+    {
+      key: "engagement",
+      label: "Engagement",
+      color: "#776BD9",
+      metrics: [
+        { label: "Volunteer signups this month", value: "41", note: "/join · Dec 2025" },
+        { label: "Partner inquiries this month", value: "19", note: "/partner · Dec 2025" },
+        { label: "Child enrollments this month", value: "33", note: "/enroll · Dec 2025" },
+        { label: "Community growth", value: "+88%", note: "2025 year-over-year" },
+      ],
+    },
+  ],
+  2026: [
+    {
+      key: "community",
+      label: "Community",
+      color: "#3AB819",
+      metrics: [
+        { label: "Total enrolled children", value: "248", note: "Active · all programs" },
+        { label: "Active volunteers", value: "176", note: "Active status in directory" },
+        { label: "Active partners", value: "64", note: "Active status · all types" },
+        { label: "New contacts this month", value: "132", note: "All record types · added this month" },
+      ],
+    },
+    {
+      key: "events",
+      label: "Events",
+      color: "#15AAD2",
+      metrics: [
+        { label: "Upcoming events", value: "12", note: "Next 30 days" },
+        { label: "RSVPs this month", value: "684", note: "Total across all events" },
+        { label: "Most attended recent event", value: "312", note: "Summer Solstice Festival · last 30 days" },
+        { label: "Total events hosted", value: "128", note: "All time through 2026" },
+      ],
+    },
+    {
+      key: "donations",
+      label: "Donations",
+      color: "#EFB003",
+      metrics: [
+        { label: "Total donated this month", value: "$28,450", note: "Confirmed charges · mock data" },
+        { label: "Total donated this year", value: "$214,890", note: "2026 year to date · mock data" },
+        { label: "Recurring vs one-time", value: "94 · 318", note: "recurring · one-time" },
+        {
+          label: "Recent donors",
+          value: "8",
+          note: "Last 10",
+          donors: [
+            { name: "M.K.", amountCents: 25_000, currency: "usd", date: "2026-06-28" },
+            { name: "A.R.", amountCents: 15_000, currency: "usd", date: "2026-06-27" },
+            { name: "J.L.", amountCents: 50_000, currency: "usd", date: "2026-06-25" },
+            { name: "S.P.", amountCents: 10_000, currency: "usd", date: "2026-06-24" },
+            { name: "N.W.", amountCents: 20_000, currency: "usd", date: "2026-06-22" },
+            { name: "T.N.", amountCents: 7500, currency: "usd", date: "2026-06-20" },
+            { name: "R.C.", amountCents: 30_000, currency: "usd", date: "2026-06-18" },
+            { name: "L.B.", amountCents: 12_500, currency: "usd", date: "2026-06-16" },
+          ],
+        },
+      ],
+    },
+    {
+      key: "engagement",
+      label: "Engagement",
+      color: "#776BD9",
+      metrics: [
+        { label: "Volunteer signups this month", value: "68", note: "/join submissions" },
+        { label: "Partner inquiries this month", value: "31", note: "/partner submissions" },
+        { label: "Child enrollments this month", value: "47", note: "/enroll submissions" },
+        { label: "Community growth", value: "+112%", note: "2026 year to date" },
+      ],
+    },
+  ],
+};
+
+/** Monthly community record totals by year (Jan–Dec). */
+const MOCK_GROWTH_BY_YEAR: Record<number, number[]> = {
+  2024: [62, 78, 95, 118, 142, 168, 196, 224, 258, 292, 328, 364],
+  2025: [88, 112, 138, 172, 208, 248, 292, 336, 384, 428, 472, 518],
+  2026: [118, 164, 221, 298, 372, 486, 542, 601, 668, 734, 812, 896],
+};
+
+export function getMockAnalyticsGroups(year: number): AnalyticsGroup[] {
+  return MOCK_ANALYTICS_BY_YEAR[year] ?? MOCK_ANALYTICS_BY_YEAR[2026]!;
+}
+
+export function getMockGrowthPoints(year: number): number[] {
+  return MOCK_GROWTH_BY_YEAR[year] ?? MOCK_GROWTH_BY_YEAR[2026]!;
+}
+
+export const MOCK_ANALYTICS_GROUPS = getMockAnalyticsGroups(2026);
+export const MOCK_GROWTH_POINTS = getMockGrowthPoints(2026);
 
 export const MOCK_STRIPE_DONATIONS: StripeDonationAnalytics = {
   connected: true,
@@ -243,8 +413,19 @@ export type MockTeamMember = {
   id: string;
   name: string;
   email: string;
+  phone: string;
   role: "Admin" | "Member";
   status: "Active" | "Pending";
+  pages: Array<
+    | "dashboard"
+    | "community"
+    | "brand-essence"
+    | "garden"
+    | "analytics"
+    | "messages"
+    | "forms"
+    | "routine-pulse"
+  >;
 };
 
 export const MOCK_TEAM_MEMBERS: MockTeamMember[] = [
@@ -252,29 +433,37 @@ export const MOCK_TEAM_MEMBERS: MockTeamMember[] = [
     id: "mock-member-sukii",
     name: "Sukii",
     email: "info@flowerchildren.world",
+    phone: "",
     role: "Admin",
     status: "Active",
+    pages: ["dashboard", "messages", "community", "garden", "brand-essence", "analytics", "forms", "routine-pulse"],
   },
   {
     id: "mock-member-sofia",
     name: "Sofia Martinez",
     email: "sofia.m@example.com",
+    phone: "(512) 555-0142",
     role: "Member",
     status: "Active",
+    pages: ["dashboard", "messages", "community", "garden"],
   },
   {
     id: "mock-member-jordan",
     name: "Jordan Lee",
     email: "jordan.lee@example.com",
+    phone: "(512) 555-0198",
     role: "Member",
     status: "Active",
+    pages: ["dashboard", "messages", "community", "garden", "analytics"],
   },
   {
     id: "mock-member-priya",
     name: "Priya Patel",
     email: "priya.p@example.com",
+    phone: "(512) 555-0177",
     role: "Member",
     status: "Active",
+    pages: ["dashboard", "messages", "community", "garden", "brand-essence"],
   },
 ];
 

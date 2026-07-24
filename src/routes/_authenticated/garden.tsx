@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Reveal } from "@/components/motion";
 import { PageLabel } from "@/components/page-label";
 import { NoteEditorPanel } from "@/components/garden/note-editor-panel";
 import { NotesTab } from "@/components/garden/notes-tab";
@@ -65,15 +66,17 @@ function GardenPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl text-[#020202]">
-        <header className={cn("mb-5 sm:mb-8", isWhiteboardMobile && "mb-3")}>
-          <PageLabel>The Garden</PageLabel>
-          <h1 className="mt-1.5 text-xl font-normal leading-tight sm:mt-2 sm:text-2xl md:text-3xl">
-            A place to think.
-          </h1>
-          <p className="mt-1.5 text-sm text-foreground/60 sm:mt-2">
-            Notes, ideas, and sketches — plant something.
-          </p>
-        </header>
+        <Reveal>
+          <header className={cn("mb-5 sm:mb-8", isWhiteboardMobile && "mb-3")}>
+            <PageLabel>The Garden</PageLabel>
+            <h1 className="mt-1.5 text-xl font-normal leading-tight sm:mt-2 sm:text-2xl md:text-3xl">
+              A place to think.
+            </h1>
+            <p className="mt-1.5 text-sm text-foreground/60 sm:mt-2">
+              Notes, ideas, and sketches — plant something.
+            </p>
+          </header>
+        </Reveal>
 
         <div
           className={cn(

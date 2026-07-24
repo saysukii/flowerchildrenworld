@@ -2,9 +2,11 @@
 
 An internal, branded home base where you and your team operate with intention — separate from the public website at [flowerchildren.world](https://flowerchildren.world).
 
-Flower Children World has been showing up for its community since 2019. Seven years of programming, relationships, and real impact. This portal is the infrastructure to match: one place to see who's in the village, represent the brand consistently, track growth, and keep the weekly rhythm steady.
+Flower Children World has been showing up for its community since 2019. Seven years of programming, relationships, and real impact. This portal is the infrastructure to match: one place to see who's in the village, message the team, represent the brand consistently, track growth, and keep the weekly rhythm steady.
 
 The public site tells the world who you are. **Inside is how the organization actually runs.**
+
+**Portal:** [inside.flowerchildren.world](https://inside.flowerchildren.world)
 
 ---
 
@@ -14,7 +16,7 @@ The public site tells the world who you are. **Inside is how the organization ac
 **Founder:** Sukii  
 **Built by:** [TAĪSTU](https://taistu.com)
 
-Inside is designed for full team transparency and operational efficiency. Everyone you invite sees the same workspace — community records, brand assets, analytics, and planning tools. 
+Inside is designed for full team transparency and operational efficiency. Everyone you invite sees the same workspace — messages, community records, brand assets, analytics, and planning tools. Admins can control which pages each member can open from **Settings**.
 
 ---
 
@@ -39,6 +41,10 @@ The menu is your map. Each section serves a specific purpose for how Flower Chil
 ### Home (`/dashboard`)
 
 The first thing you see when you log in. A greeting, today's date, and a snapshot of what's happening now — plus a link into your **Routine Pulse** for the week. Over time this will surface live calendar events (Luma) and upcoming programming so nothing falls through.
+
+### Messages (`/messages`)
+
+Internal team messaging — start a direct conversation, use `@` to mention someone, and keep coordination in one place instead of scattered texts. Unread counts show in the conversation list and on the Messages nav item. A notification bell (mobile header and desktop sidebar) surfaces new messages and mentions; opening a thread or tapping a notification marks them read.
 
 ### Community (`/community`)
 
@@ -70,10 +76,10 @@ One dashboard showing how FCW is growing — community numbers, events, donation
 
 - **Community** — enrolled children, active volunteers, partners, new contacts
 - **Events** — upcoming programming and RSVPs (Luma integration)
-- **Donations** — monthly and all-time totals (Stripe integration)
+- **Donations** — monthly and all-time totals (Stripe Connect)
 - **Engagement** — form submissions by type, growth over time
 
-Open Analytics and the picture is complete — no digging through spreadsheets or logging into three different platforms.
+Connect Stripe in **Settings** so donation totals pull from the connected account. Open Analytics and the picture is complete — no digging through spreadsheets or logging into three different platforms.
 
 ### The Garden (`/garden`)
 
@@ -85,7 +91,7 @@ Your weekly rhythm, made visible. Set reminders for the rituals that keep FCW ru
 
 ### Settings (`/settings`)
 
-Account, team invites, and integrations (Luma, Google Calendar, Stripe). This is where you manage who has access and connect the tools that power Home and Analytics.
+Account, team invites, page access, and integrations (Google, Stripe Connect). This is where you manage who has access, which pages they can see, and the tools that power donations and Analytics.
 
 ---
 
@@ -127,7 +133,7 @@ Color as energy. Calm as a feeling before it's a framework. Rooted in nature and
 
 Inside is built around how FCW actually works — not generic software adapted later.
 
-1. **One home for operations** — community, brand, forms, and growth metrics in a single branded space your team can trust.
+1. **One home for operations** — messages, community, brand, forms, and growth metrics in a single branded space your team can trust.
 2. **Brand consistency by design** — Brand Essence means anyone on the team can represent FCW correctly without hunting for files.
 3. **Automatic intake** — public forms connect to Community so new volunteers, partners, and families don't get lost.
 4. **Rhythm over chaos** — Home and Routine Pulse keep the weekly cadence visible so programming, outreach, and follow-ups stay on track.
@@ -140,22 +146,44 @@ Inside is built around how FCW actually works — not generic software adapted l
 
 **Live now**
 
-- Full portal structure and navigation
+- Full portal structure and navigation (with per-member page access)
 - Sign-in (magic link, password, Google)
+- Team messages with @mentions and in-app notifications
 - Community directory (ready for records)
 - Brand Essence (colors, C.A.L.M., mission, asset structure)
 - Public intake forms (`/join`, `/partner`, `/enroll`) with branded confirmation emails
 - Branded email templates (preview + test send on `/forms`)
-- Analytics dashboard layout
+- Analytics dashboard layout + Stripe donation totals when Connect is linked
+- Public donation checkout via Stripe (`/api/donations/checkout`)
 - The Garden (notes + whiteboard)
 - Routine Pulse (weekly ritual reminders)
-- Team settings and invite flow
+- Team settings, invites, and Stripe Connect / Google integrations
+- Cloudflare Worker routing for `flowerchildren.world` → Framer + Railway
+
+---
+
+## Where things live
+
+| Service | What it’s for |
+|---------|----------------|
+| **[GitHub](https://github.com)** | Source of truth for the code. All app changes live in this repo — history, pull requests, and deploys start here. |
+| **[Railway](https://railway.app)** | Hosts the running app (`inside.flowerchildren.world`) and the API used by public forms, donations, and Stripe webhooks. Environment variables (Stripe, Resend, Supabase keys, etc.) are set here for production. |
+| **[Supabase](https://supabase.com)** | Auth and database — team sign-in (magic link, password, Google), user sessions, and persisted data (community, Garden, Stripe connection state, migrations under `supabase/migrations/`). |
+
+Related (already in use for the public site):
+
+| Service | What it’s for |
+|---------|----------------|
+| **Framer** | Public marketing site at `flowerchildren.world` (including donate page UI). |
+| **Cloudflare** | Worker in front of `flowerchildren.world` that routes marketing pages to Framer and `/join`, `/partner`, `/enroll`, `/api/*` to Railway. See [`cloudflare/README.md`](cloudflare/README.md). |
+| **Resend** | Branded transactional email (team invites + form confirmations). |
+| **Stripe** | Donations (Checkout) and Connect for Analytics totals. |
 
 ---
 
 ## For developers
 
-This repository powers the Inside portal. Stack: React, TanStack Start, Supabase (auth + data), deployed on Railway.
+This repository powers the Inside portal at `inside.flowerchildren.world`. Stack: React, TanStack Start, **Supabase** (auth + data), deployed on **Railway**, with code on **GitHub**.
 
 ```bash
 npm install
@@ -165,7 +193,7 @@ npm run build          # production build
 npm start              # run production server locally
 ```
 
-See `.env.example` for required environment variables. Database migrations live in `supabase/migrations/`.
+See `.env.example` for required environment variables. Database migrations live in `supabase/migrations/` and are applied in Supabase. Production env vars are configured on Railway (not committed to GitHub).
 
 ### Public site routing (`flowerchildren.world`)
 
@@ -177,6 +205,18 @@ See [`cloudflare/README.md`](cloudflare/README.md) for the worker script and set
 - `flowerchildren.world/join`, `/partner`, `/enroll` → Railway forms
 - `flowerchildren.world/api/*` → Railway API (donations, form submit, Stripe webhook)
 - `inside.flowerchildren.world` → team portal only
+
+### Stripe Connect (donations + Analytics)
+
+Donations use Stripe Checkout on a **connected account** (sellers collect directly). Platform keys live on Railway; the org account is linked from **Settings → Connect Stripe**.
+
+1. Enable Stripe Connect (Standard / Dashboard accounts + OAuth).
+2. Set `STRIPE_SECRET_KEY`, `STRIPE_CLIENT_ID`, and `STRIPE_WEBHOOK_SECRET` on Railway.
+3. Register OAuth redirect: `https://inside.flowerchildren.world/api/stripe/callback`
+4. Register webhook: `https://inside.flowerchildren.world/api/stripe/webhook`  
+   Listen to **Connected accounts** for `checkout.session.completed` and `invoice.paid`.
+5. Set `DONATION_WIDGET_ORIGIN` to the public donate page origin (e.g. `https://flowerchildren.world`).
+6. Apply the Stripe Supabase migration, then connect from Settings and smoke-test a donation.
 
 ### Email (Resend)
 
@@ -192,4 +232,4 @@ In Supabase → Authentication → Email Templates, you can disable or simplify 
 
 ---
 
-*Inside · Flower Children World × TAĪSTU · June 2026*
+*Inside · Flower Children World × TAĪSTU · July 2026*

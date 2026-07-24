@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MessageCircle, Search, Send } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Reveal } from "@/components/motion";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,21 +12,28 @@ import {
   formatMessageTime,
   lastMessagePreview,
   loadMessagesStore,
+  markThreadRead,
   mentionSegments,
   messagesForThread,
   saveMessagesStore,
   sendMessage,
+  subscribeMessagesChanged,
   threadPartnerName,
   threadsForUser,
+  unreadCountForThread,
   type MessagesStore,
   type MessageThread,
 } from "@/lib/messages";
+import { DEFAULT_MEMBER_PAGES } from "@/lib/page-access";
 import { loadTeamMembers, type TeamMember } from "@/lib/team-members";
 import { getDisplayName, isAdmin } from "@/lib/user-role";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/messages")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    thread: typeof search.thread === "string" ? search.thread : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Messages — Flower Children World" },
@@ -46,8 +54,10 @@ function mergeTeamDirectory(email: string, name: string, admin: boolean): TeamMe
       id: crypto.randomUUID(),
       name,
       email,
+      phone: "",
       role: admin ? "Admin" : "Member",
       status: "Active",
+      pages: [...DEFAULT_MEMBER_PAGES],
     });
   }
 
@@ -55,7 +65,12 @@ function mergeTeamDirectory(email: string, name: string, admin: boolean): TeamMe
     for (const mock of MOCK_TEAM_MEMBERS) {
       const existing = byEmail.get(mock.email.toLowerCase());
       // Prefer stable mock ids so seeded conversations stay linked.
-      byEmail.set(mock.email.toLowerCase(), existing ? { ...existing, id: mock.id, name: existing.name || mock.name } : mock);
+      byEmail.set(
+        mock.email.toLowerCase(),
+        existing
+          ? { ...existing, id: mock.id, name: existing.name || mock.name }
+          : { ...mock },
+      );
     }
   }
 
@@ -73,18 +88,26 @@ function resolveCurrentMember(members: TeamMember[], email: string, name: string
     id: userId,
     name,
     email,
+    phone: "",
     role: "Member" as const,
     status: "Active" as const,
+    pages: [...DEFAULT_MEMBER_PAGES],
   };
 }
 
 function MessagesPage() {
   const navigate = useNavigate();
+  const { thread: threadFromSearch } = Route.useSearch();
   const [ready, setReady] = useState(false);
   const [admin, setAdmin] = useState(false);
   const [current, setCurrent] = useState<TeamMember | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [store, setStore] = useState<MessagesStore>({ threads: [], messages: [] });
+  const [store, setStore] = useState<MessagesStore>({
+    threads: [],
+    messages: [],
+    notifications: [],
+    threadReads: {},
+  });
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
@@ -116,6 +139,19 @@ function MessagesPage() {
       setReady(true);
     })();
   }, [navigate]);
+
+  useEffect(() => {
+    return subscribeMessagesChanged(() => setStore(loadMessagesStore()));
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !current || !threadFromSearch) return;
+    const latest = loadMessagesStore();
+    if (!latest.threads.some((t) => t.id === threadFromSearch)) return;
+    setActiveThreadId(threadFromSearch);
+    setMobileShowThread(true);
+    setStore(markThreadRead(latest, current.id, threadFromSearch));
+  }, [ready, current, threadFromSearch]);
 
   const myThreads = useMemo(() => {
     if (!current) return [];
@@ -167,6 +203,14 @@ function MessagesPage() {
     setMobileShowThread(true);
     setDraft("");
     setMentionOpen(false);
+    if (current) {
+      setStore(markThreadRead(loadMessagesStore(), current.id, thread.id));
+    }
+    void navigate({
+      to: "/messages",
+      search: { thread: thread.id },
+      replace: true,
+    });
   }
 
   function startConversation(member: TeamMember) {
@@ -236,16 +280,21 @@ function MessagesPage() {
   return (
     <AppShell>
       <div className="mx-auto flex h-[calc(100dvh-5.5rem)] max-w-6xl flex-col md:h-[calc(100dvh-4rem)]">
-        <header className="mb-4 shrink-0 sm:mb-6">
-          <span className="font-label text-[11px] text-foreground/50">Messages</span>
-          <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Team messages</h1>
-          <p className="mt-2 text-sm text-foreground/60">
-            Talk with the team — use @ to mention who you&apos;re speaking to.
-            {admin ? " Admins can message anyone." : ""}
-          </p>
-        </header>
+        <Reveal className="mb-4 shrink-0 sm:mb-6">
+          <header>
+            <span className="font-label text-[11px] text-foreground/50">Messages</span>
+            <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Team messages</h1>
+            <p className="mt-2 text-sm text-foreground/60">
+              Talk with the team — use @ to mention who you&apos;re speaking to.
+              {admin ? " Admins can message anyone." : ""}
+            </p>
+          </header>
+        </Reveal>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-3xl border border-black/5 bg-white md:grid-cols-[minmax(240px,300px)_1fr]">
+        <Reveal
+          delayMs={80}
+          className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-3xl border border-black/5 bg-white md:grid-cols-[minmax(240px,300px)_1fr]"
+        >
           {/* Conversation list */}
           <aside
             className={cn(
@@ -304,6 +353,7 @@ function MessagesPage() {
                   {filteredThreads.map((thread) => {
                     const partner = threadPartnerName(thread, current.id);
                     const active = thread.id === activeThreadId;
+                    const unread = unreadCountForThread(store, current.id, thread.id);
                     return (
                       <li key={thread.id}>
                         <button
@@ -317,7 +367,14 @@ function MessagesPage() {
                           <ProfileAvatar name={partner} size="sm" />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline justify-between gap-2">
-                              <p className="truncate text-sm font-normal">{partner}</p>
+                              <p
+                                className={cn(
+                                  "truncate text-sm",
+                                  unread > 0 && !active ? "font-medium" : "font-normal",
+                                )}
+                              >
+                                {partner}
+                              </p>
                               <span
                                 className={cn(
                                   "shrink-0 text-[10px] font-light",
@@ -327,14 +384,25 @@ function MessagesPage() {
                                 {formatMessageTime(thread.updatedAt)}
                               </span>
                             </div>
-                            <p
-                              className={cn(
-                                "mt-0.5 line-clamp-1 text-xs font-light",
-                                active ? "text-background/70" : "text-foreground/50",
-                              )}
-                            >
-                              {lastMessagePreview(store, thread.id)}
-                            </p>
+                            <div className="mt-0.5 flex items-center gap-2">
+                              <p
+                                className={cn(
+                                  "min-w-0 flex-1 line-clamp-1 text-xs font-light",
+                                  active
+                                    ? "text-background/70"
+                                    : unread > 0
+                                      ? "text-foreground/70"
+                                      : "text-foreground/50",
+                                )}
+                              >
+                                {lastMessagePreview(store, thread.id)}
+                              </p>
+                              {unread > 0 && !active ? (
+                                <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[#3AB819] px-1 text-[10px] font-medium leading-none text-white">
+                                  {unread > 9 ? "9+" : unread}
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
                         </button>
                       </li>
@@ -508,7 +576,7 @@ function MessagesPage() {
               </>
             )}
           </section>
-        </div>
+        </Reveal>
       </div>
     </AppShell>
   );

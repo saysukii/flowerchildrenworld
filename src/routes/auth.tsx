@@ -1,13 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import fcwLogo from "@/assets/fcw-full-logo.png.asset.json";
+import { PageEnter } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
-import fcwLogo from "@/assets/fcw-full-logo.png.asset.json";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -81,7 +82,7 @@ function AuthPage() {
         />
       </div>
 
-      <div className="flex w-full max-w-lg flex-col items-center gap-4">
+      <PageEnter className="flex w-full max-w-lg flex-col items-center gap-4">
           <p className="max-w-xs px-2 text-center text-xs font-light text-foreground/60 text-balance sm:max-w-sm">
             Welcome in. A private space — for the hands that build the village.
           </p>
@@ -177,7 +178,7 @@ function AuthPage() {
             Sign in with Google
           </button>
         </div>
-      </div>
+      </PageEnter>
     </main>
   );
 }

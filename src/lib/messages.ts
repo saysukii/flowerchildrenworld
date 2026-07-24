@@ -23,14 +23,99 @@ export type MessageThread = {
   updatedAt: string;
 };
 
+export type MessageNotification = {
+  id: string;
+  recipientId: string;
+  threadId: string;
+  messageId: string;
+  kind: "message" | "mention";
+  actorName: string;
+  preview: string;
+  createdAt: string;
+  read: boolean;
+};
+
 export type MessagesStore = {
   threads: MessageThread[];
   messages: TeamMessage[];
+  notifications: MessageNotification[];
+  /** `${userId}:${threadId}` → ISO last-read timestamp */
+  threadReads: Record<string, string>;
 };
 
 const STORAGE_KEY = "fcw-messages";
+const CHANGED_EVENT = "fcw-messages-changed";
 
-const EMPTY_STORE: MessagesStore = { threads: [], messages: [] };
+const EMPTY_STORE: MessagesStore = {
+  threads: [],
+  messages: [],
+  notifications: [],
+  threadReads: {},
+};
+
+function normalizeStore(parsed: Partial<MessagesStore>): MessagesStore {
+  return {
+    threads: Array.isArray(parsed.threads) ? parsed.threads : [],
+    messages: Array.isArray(parsed.messages) ? parsed.messages : [],
+    notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
+    threadReads:
+      parsed.threadReads && typeof parsed.threadReads === "object" ? parsed.threadReads : {},
+  };
+}
+
+function seedStore(): MessagesStore {
+  const seeded = normalizeStore({
+    threads: [...MOCK_MESSAGE_THREADS],
+    messages: [...MOCK_MESSAGES],
+  });
+  return {
+    ...seeded,
+    notifications: buildSeedNotifications(seeded),
+  };
+}
+
+/** Demo inbox items from seeded mock messages (mentions + latest inbound). */
+function buildSeedNotifications(store: MessagesStore): MessageNotification[] {
+  const notifications: MessageNotification[] = [];
+
+  for (const message of store.messages) {
+    const thread = store.threads.find((t) => t.id === message.threadId);
+    if (!thread) continue;
+
+    const mentionIds = new Set(message.mentions.map((m) => m.memberId));
+    for (const mention of message.mentions) {
+      if (mention.memberId === message.senderId) continue;
+      notifications.push({
+        id: `mock-notif-${message.id}-mention-${mention.memberId}`,
+        recipientId: mention.memberId,
+        threadId: message.threadId,
+        messageId: message.id,
+        kind: "mention",
+        actorName: message.senderName,
+        preview: message.body,
+        createdAt: message.createdAt,
+        read: false,
+      });
+    }
+
+    for (const participantId of thread.participantIds) {
+      if (participantId === message.senderId || mentionIds.has(participantId)) continue;
+      notifications.push({
+        id: `mock-notif-${message.id}-message-${participantId}`,
+        recipientId: participantId,
+        threadId: message.threadId,
+        messageId: message.id,
+        kind: "message",
+        actorName: message.senderName,
+        preview: message.body,
+        createdAt: message.createdAt,
+        read: false,
+      });
+    }
+  }
+
+  return notifications.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
 
 function readStore(): MessagesStore {
   if (typeof window === "undefined") return EMPTY_STORE;
@@ -38,17 +123,20 @@ function readStore(): MessagesStore {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       if (isDevMock) {
-        const seeded = { threads: [...MOCK_MESSAGE_THREADS], messages: [...MOCK_MESSAGES] };
+        const seeded = seedStore();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
         return seeded;
       }
       return EMPTY_STORE;
     }
-    const parsed = JSON.parse(raw) as Partial<MessagesStore>;
-    return {
-      threads: Array.isArray(parsed.threads) ? parsed.threads : [],
-      messages: Array.isArray(parsed.messages) ? parsed.messages : [],
-    };
+    const store = normalizeStore(JSON.parse(raw) as Partial<MessagesStore>);
+    // Migrate older local stores that predate notifications.
+    if (store.notifications.length === 0 && store.messages.length > 0) {
+      const migrated = { ...store, notifications: buildSeedNotifications(store) };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
+    return store;
   } catch {
     return EMPTY_STORE;
   }
@@ -56,6 +144,25 @@ function readStore(): MessagesStore {
 
 function writeStore(store: MessagesStore) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  notifyMessagesChanged();
+}
+
+export function notifyMessagesChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(CHANGED_EVENT));
+}
+
+/** Subscribe to same-tab + cross-tab message store updates. */
+export function subscribeMessagesChanged(listener: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY || event.key === null) listener();
+  };
+  window.addEventListener(CHANGED_EVENT, listener);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(CHANGED_EVENT, listener);
+    window.removeEventListener("storage", onStorage);
+  };
 }
 
 export function loadMessagesStore(): MessagesStore {
@@ -64,6 +171,10 @@ export function loadMessagesStore(): MessagesStore {
 
 export function saveMessagesStore(store: MessagesStore) {
   writeStore(store);
+}
+
+export function threadReadKey(userId: string, threadId: string) {
+  return `${userId}:${threadId}`;
 }
 
 /** Match @Name against team members (longest names first so "Jordan Lee" wins over "Jordan"). */
@@ -119,6 +230,51 @@ export function findOrCreateThread(
   return { store: next, thread };
 }
 
+function previewText(body: string, max = 90) {
+  const trimmed = body.trim().replace(/\s+/g, " ");
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
+}
+
+function notificationsForMessage(
+  message: TeamMessage,
+  thread: MessageThread,
+): MessageNotification[] {
+  const mentionIds = new Set(message.mentions.map((m) => m.memberId));
+  const items: MessageNotification[] = [];
+
+  for (const mention of message.mentions) {
+    if (mention.memberId === message.senderId) continue;
+    items.push({
+      id: crypto.randomUUID(),
+      recipientId: mention.memberId,
+      threadId: message.threadId,
+      messageId: message.id,
+      kind: "mention",
+      actorName: message.senderName,
+      preview: previewText(message.body),
+      createdAt: message.createdAt,
+      read: false,
+    });
+  }
+
+  for (const participantId of thread.participantIds) {
+    if (participantId === message.senderId || mentionIds.has(participantId)) continue;
+    items.push({
+      id: crypto.randomUUID(),
+      recipientId: participantId,
+      threadId: message.threadId,
+      messageId: message.id,
+      kind: "message",
+      actorName: message.senderName,
+      preview: previewText(message.body),
+      createdAt: message.createdAt,
+      read: false,
+    });
+  }
+
+  return items;
+}
+
 export function sendMessage(
   store: MessagesStore,
   input: {
@@ -132,6 +288,9 @@ export function sendMessage(
   const body = input.body.trim();
   if (!body) return store;
 
+  const thread = store.threads.find((t) => t.id === input.threadId);
+  if (!thread) return store;
+
   const message: TeamMessage = {
     id: crypto.randomUUID(),
     threadId: input.threadId,
@@ -142,13 +301,18 @@ export function sendMessage(
     createdAt: new Date().toISOString(),
   };
 
-  const threads = store.threads.map((thread) =>
-    thread.id === input.threadId ? { ...thread, updatedAt: message.createdAt } : thread,
+  const threads = store.threads.map((t) =>
+    t.id === input.threadId ? { ...t, updatedAt: message.createdAt } : t,
   );
 
-  const next = {
+  const next: MessagesStore = {
+    ...store,
     threads: [...threads].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     messages: [...store.messages, message],
+    notifications: [
+      ...notificationsForMessage(message, thread),
+      ...store.notifications,
+    ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   };
   writeStore(next);
   return next;
@@ -177,6 +341,93 @@ export function lastMessagePreview(store: MessagesStore, threadId: string) {
   const msgs = messagesForThread(store, threadId);
   const last = msgs[msgs.length - 1];
   return last?.body ?? "No messages yet";
+}
+
+export function unreadCountForThread(store: MessagesStore, userId: string, threadId: string) {
+  const lastRead = store.threadReads[threadReadKey(userId, threadId)];
+  return messagesForThread(store, threadId).filter((message) => {
+    if (message.senderId === userId) return false;
+    if (!lastRead) return true;
+    return message.createdAt > lastRead;
+  }).length;
+}
+
+export function totalUnreadMessageCount(store: MessagesStore, userId: string) {
+  return threadsForUser(store, userId).reduce(
+    (sum, thread) => sum + unreadCountForThread(store, userId, thread.id),
+    0,
+  );
+}
+
+export function notificationsForUser(store: MessagesStore, userId: string) {
+  return store.notifications
+    .filter((n) => n.recipientId === userId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function unreadNotificationCount(store: MessagesStore, userId: string) {
+  return notificationsForUser(store, userId).filter((n) => !n.read).length;
+}
+
+export function markThreadRead(
+  store: MessagesStore,
+  userId: string,
+  threadId: string,
+): MessagesStore {
+  const now = new Date().toISOString();
+  const next: MessagesStore = {
+    ...store,
+    threadReads: {
+      ...store.threadReads,
+      [threadReadKey(userId, threadId)]: now,
+    },
+    notifications: store.notifications.map((n) =>
+      n.recipientId === userId && n.threadId === threadId && !n.read ? { ...n, read: true } : n,
+    ),
+  };
+  writeStore(next);
+  return next;
+}
+
+export function markNotificationRead(store: MessagesStore, notificationId: string): MessagesStore {
+  const target = store.notifications.find((n) => n.id === notificationId);
+  if (!target || target.read) return store;
+
+  const next: MessagesStore = {
+    ...store,
+    notifications: store.notifications.map((n) =>
+      n.id === notificationId ? { ...n, read: true } : n,
+    ),
+    threadReads: {
+      ...store.threadReads,
+      [threadReadKey(target.recipientId, target.threadId)]:
+        store.threadReads[threadReadKey(target.recipientId, target.threadId)] ?? target.createdAt,
+    },
+  };
+  writeStore(next);
+  return next;
+}
+
+export function markAllNotificationsRead(store: MessagesStore, userId: string): MessagesStore {
+  const now = new Date().toISOString();
+  const threadReads = { ...store.threadReads };
+  for (const n of store.notifications) {
+    if (n.recipientId !== userId) continue;
+    const key = threadReadKey(userId, n.threadId);
+    if (!threadReads[key] || threadReads[key]! < n.createdAt) {
+      threadReads[key] = now;
+    }
+  }
+
+  const next: MessagesStore = {
+    ...store,
+    threadReads,
+    notifications: store.notifications.map((n) =>
+      n.recipientId === userId && !n.read ? { ...n, read: true } : n,
+    ),
+  };
+  writeStore(next);
+  return next;
 }
 
 /** Split body into text / mention segments for rendering. */

@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { PageEnter } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   head: () => ({
@@ -46,12 +47,12 @@ function OnboardingPage() {
   }
 
   return (
-    <main className="min-h-screen w-full flex items-center justify-center px-5 py-10 bg-background">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
+    <main className="flex min-h-screen w-full items-center justify-center bg-background px-5 py-10">
+      <PageEnter className="w-full max-w-sm">
+        <div className="mb-8 text-center">
           <h1 className="text-2xl tracking-tight text-foreground">Welcome</h1>
-          <p className="mt-2 text-sm text-foreground/60 font-light">
-            You've been invited to Inside.
+          <p className="mt-2 text-sm font-light text-foreground/60">
+            You&apos;ve been invited to Inside.
           </p>
         </div>
 
@@ -106,7 +107,7 @@ function OnboardingPage() {
         <p className="mt-6 text-center text-xs text-foreground/40">
           Flower Children World
         </p>
-      </div>
+      </PageEnter>
     </main>
   );
 }

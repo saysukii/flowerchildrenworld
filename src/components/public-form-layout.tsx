@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import fcwFullLogo from "@/assets/fcw-full-logo.png.asset.json";
+import { PageEnter } from "@/components/motion";
 
 export function PublicFormFooter() {
   return (
@@ -34,17 +35,17 @@ export function PublicFormLayout({
 
       {/* Main */}
       <main className="flex-1 px-4 pt-0 pb-10 sm:pb-14">
-        <div className="mx-auto w-full max-w-xl">
-          <div className="text-center mb-8">
+        <PageEnter className="mx-auto w-full max-w-xl">
+          <div className="mb-8 text-center">
             <span className="font-label text-[11px] text-foreground/50">{label}</span>
-            <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">{title}</h1>
+            <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">{title}</h1>
             <p className="mt-3 text-sm font-light text-foreground/60">{subtitle}</p>
           </div>
 
           <section className="rounded-3xl border border-black/5 bg-white px-6 py-7 sm:px-8 sm:py-9">
             {children}
           </section>
-        </div>
+        </PageEnter>
       </main>
 
       <PublicFormFooter />

@@ -1,4 +1,4 @@
-/** Pages an admin can grant to team members. Admins always see every page. */
+/** Pages an admin can grant to team members. Auth admins always see every page. */
 
 export type PageKey =
   | "dashboard"
@@ -37,31 +37,32 @@ export const DEFAULT_MEMBER_PAGES: PageKey[] = [
   "garden",
 ];
 
-const STORAGE_KEY = "fcw-member-page-access";
+const LEGACY_STORAGE_KEY = "fcw-member-page-access";
 const CHANGED_EVENT = "fcw-page-access-changed";
 
-export function loadMemberPageAccess(): PageKey[] {
+const ALLOWED_KEYS = new Set(CONTROLLABLE_PAGES.map((p) => p.key));
+
+export function normalizePages(pages: unknown): PageKey[] {
+  if (!Array.isArray(pages)) return [...DEFAULT_MEMBER_PAGES];
+  const keys = pages.filter((k): k is PageKey => typeof k === "string" && ALLOWED_KEYS.has(k as PageKey));
+  if (!keys.includes("dashboard")) keys.unshift("dashboard");
+  return keys;
+}
+
+/** Legacy global defaults — used when a member has no per-person pages yet. */
+export function loadLegacyMemberPageAccess(): PageKey[] {
   if (typeof window === "undefined") return [...DEFAULT_MEMBER_PAGES];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return [...DEFAULT_MEMBER_PAGES];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [...DEFAULT_MEMBER_PAGES];
-    const allowed = new Set(CONTROLLABLE_PAGES.map((p) => p.key));
-    const keys = parsed.filter((k): k is PageKey => typeof k === "string" && allowed.has(k as PageKey));
-    // Home is always available so members aren't locked out of the app.
-    if (!keys.includes("dashboard")) keys.unshift("dashboard");
-    return keys;
+    return normalizePages(JSON.parse(raw));
   } catch {
     return [...DEFAULT_MEMBER_PAGES];
   }
 }
 
-export function saveMemberPageAccess(pages: PageKey[]) {
-  const allowed = new Set(CONTROLLABLE_PAGES.map((p) => p.key));
-  const next = pages.filter((k) => allowed.has(k));
-  if (!next.includes("dashboard")) next.unshift("dashboard");
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+export function notifyPageAccessChanged() {
+  if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(CHANGED_EVENT));
 }
 
@@ -74,7 +75,7 @@ export function onPageAccessChanged(listener: () => void) {
   };
 }
 
-export function canAccessPage(page: PageKey, admin: boolean, memberPages: PageKey[] = loadMemberPageAccess()) {
+export function canAccessPage(page: PageKey, admin: boolean, memberPages: PageKey[]) {
   if (admin) return true;
   return memberPages.includes(page);
 }
@@ -86,7 +87,7 @@ export function pageKeyFromPath(pathname: string): PageKey | null {
   return match?.key ?? null;
 }
 
-export function firstAllowedPath(admin: boolean, memberPages: PageKey[] = loadMemberPageAccess()) {
+export function firstAllowedPath(admin: boolean, memberPages: PageKey[]) {
   if (admin) return "/dashboard";
   const first = CONTROLLABLE_PAGES.find((p) => memberPages.includes(p.key));
   return first?.path ?? "/dashboard";

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Reveal } from "@/components/motion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -145,10 +146,11 @@ function RoutinePulsePage() {
         </header>
 
         <div className="space-y-6">
-          {DAYS.map(({ key, short }) => {
+          {DAYS.map(({ key, short }, index) => {
             const ritual = ready ? ritualForDay(rituals, key) : DEFAULT_RITUALS.find((r) => r.day === key);
             return (
-              <section key={key}>
+              <Reveal key={key} delayMs={index * 40}>
+              <section>
                 <h2 className="font-label mb-3 text-[11px] text-foreground/50">{short}</h2>
                 {ritual ? (
                   <div className="rounded-2xl border border-black/5 bg-white px-4 py-4 sm:px-5">
@@ -194,6 +196,7 @@ function RoutinePulsePage() {
                   </p>
                 )}
               </section>
+              </Reveal>
             );
           })}
         </div>

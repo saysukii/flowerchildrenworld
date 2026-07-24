@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Reveal } from "@/components/motion";
 import { PageLabel } from "@/components/page-label";
 import { SheetsImportButton, SheetsImportDialog } from "@/components/community/sheets-import-dialog";
 import {
@@ -203,16 +204,18 @@ function CommunityPage() {
     <AppShell>
       <div className="mx-auto max-w-6xl pb-[calc(2.625rem+max(1.5rem,env(safe-area-inset-bottom)))] md:pb-[4.125rem]">
         {/* Header */}
-        <header className="mb-6 sm:mb-8">
-          <PageLabel>Community</PageLabel>
-          <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">The village directory</h1>
-          <p className="mt-2 text-sm text-foreground/60">
-            Children, guardians, volunteers, and partners — one tidy home.
-          </p>
-        </header>
+        <Reveal>
+          <header className="mb-6 sm:mb-8">
+            <PageLabel>Community</PageLabel>
+            <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">The village directory</h1>
+            <p className="mt-2 text-sm text-foreground/60">
+              Children, guardians, volunteers, and partners — one tidy home.
+            </p>
+          </header>
+        </Reveal>
 
         {/* Search, actions, and tabs */}
-        <div className="mb-5 flex flex-col gap-3">
+        <Reveal delayMs={60} className="mb-5 flex flex-col gap-3">
           <div
             className={`relative overflow-hidden pl-9 pr-3 focus-within:border-foreground/30 ${FILTER_CONTROL_CLASS}`}
           >
@@ -249,9 +252,10 @@ function CommunityPage() {
               })}
             </div>
           </div>
-        </div>
+        </Reveal>
 
         {/* Records */}
+        <Reveal delayMs={100}>
         <section className="overflow-hidden rounded-3xl border border-black/5 bg-white">
           <div className="md:hidden divide-y divide-black/5">
             {!ready ? (
@@ -406,6 +410,7 @@ function CommunityPage() {
             </table>
           </div>
         </section>
+        </Reveal>
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur md:left-64">

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { Reveal } from "@/components/motion";
 import { PageLabel } from "@/components/page-label";
 import { FilesCard, vaultUploadCategory } from "@/components/brand-essence/files-card";
 import { UploadAssetDialog } from "@/components/brand-essence/upload-asset-dialog";
@@ -82,15 +83,17 @@ function BrandEssencePage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl">
-        <header className="mb-6 sm:mb-8">
-          <PageLabel>Brand Essence</PageLabel>
-          <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">Everything that makes us, us.</h1>
-          <p className="mt-2 text-sm text-foreground/60">
-            Logos, colors, typography, templates, copy, and core documents — one source of truth.
-          </p>
-        </header>
+        <Reveal>
+          <header className="mb-6 sm:mb-8">
+            <PageLabel>Brand Essence</PageLabel>
+            <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Everything that makes us, us.</h1>
+            <p className="mt-2 text-sm text-foreground/60">
+              Logos, colors, typography, templates, copy, and core documents — one source of truth.
+            </p>
+          </header>
+        </Reveal>
 
-        <div className="-mx-4 mb-5 overflow-x-auto sm:mx-0">
+        <Reveal delayMs={60} className="-mx-4 mb-5 overflow-x-auto sm:mx-0">
           <div className="flex min-w-max gap-2 px-4 sm:w-full sm:min-w-0 sm:px-0">
             {TABS.map((t) => {
               const isActive = t.key === tab;
@@ -110,24 +113,26 @@ function BrandEssencePage() {
               );
             })}
           </div>
-        </div>
+        </Reveal>
 
         {showVault ? (
-          <FilesCard
-            title={tab === "all" ? "Files" : active.label}
-            assets={vaultAssets}
-            admin={admin}
-            emptyLabel={
-              admin
-                ? `Nothing here yet — upload your first ${active.key === "all" ? "file" : active.label.toLowerCase()}.`
-                : `No ${active.key === "all" ? "files" : active.label.toLowerCase()} yet.`
-            }
-            onUpload={openVaultUpload}
-            onDelete={handleDelete}
-          />
+          <Reveal delayMs={100}>
+            <FilesCard
+              title={tab === "all" ? "Files" : active.label}
+              assets={vaultAssets}
+              admin={admin}
+              emptyLabel={
+                admin
+                  ? `Nothing here yet — upload your first ${active.key === "all" ? "file" : active.label.toLowerCase()}.`
+                  : `No ${active.key === "all" ? "files" : active.label.toLowerCase()} yet.`
+              }
+              onUpload={openVaultUpload}
+              onDelete={handleDelete}
+            />
+          </Reveal>
         ) : null}
 
-        <div className="flex flex-col gap-5">
+        <Reveal delayMs={120} className="flex flex-col gap-5">
           {showLogos ? (
             <LogosCard
               assets={assets}
@@ -139,7 +144,7 @@ function BrandEssencePage() {
           {showColors ? <ColorPaletteCard admin={admin} /> : null}
           {showTypography ? <TypographyCard /> : null}
           {showMission ? <MissionCard admin={admin} /> : null}
-        </div>
+        </Reveal>
       </div>
 
       {admin ? (

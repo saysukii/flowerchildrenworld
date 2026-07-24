@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
+import { Reveal } from "@/components/motion";
 import { PageLabel } from "@/components/page-label";
 import {
   isDevMock,
@@ -48,62 +49,70 @@ function DashboardPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-5xl space-y-5">
-        <section
-          className="rounded-3xl border border-black/5 px-6 py-8 sm:px-8 sm:py-10"
-          style={{ background: "linear-gradient(135deg, rgba(58,184,25,0.10), rgba(252,252,252,1) 70%)" }}
-        >
-          <p className="text-2xl sm:text-3xl font-normal leading-tight">
-            {greeting(now)} <span>{USER.firstName}</span>
-          </p>
-          <p className="mt-2 text-sm text-foreground/60">{dateLabel}</p>
-        </section>
+        <Reveal>
+          <section
+            className="rounded-3xl border border-black/5 px-6 py-8 sm:px-8 sm:py-10"
+            style={{ background: "linear-gradient(135deg, rgba(58,184,25,0.10), rgba(252,252,252,1) 70%)" }}
+          >
+            <p className="text-2xl sm:text-3xl font-normal leading-tight">
+              {greeting(now)} <span>{USER.firstName}</span>
+            </p>
+            <p className="mt-2 text-sm text-foreground/60">{dateLabel}</p>
+          </section>
+        </Reveal>
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Reveal delayMs={60}>
+            <Card>
+              <Label>Today</Label>
+              <h2 className="mt-2 text-xl font-normal">What&apos;s happening</h2>
+              {todayEvents.length > 0 ? (
+                <ul className="mt-4 space-y-3">
+                  {todayEvents.map((event) => (
+                    <EventRow key={`${event.title}-${event.time}`} event={event} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 text-sm leading-relaxed text-foreground/60">
+                  Nothing scheduled today — a good day to rest or get ahead.
+                </p>
+              )}
+            </Card>
+          </Reveal>
+
+          <Reveal delayMs={120}>
+            <Card>
+              <Label>Routine Pulse</Label>
+              <h2 className="mt-2 text-xl font-normal">{ritual.name}</h2>
+              <p className="mt-4 text-sm leading-relaxed text-foreground/60">{ritual.description}</p>
+              <Link
+                to="/routine-pulse"
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-normal"
+                style={{ color: "#3AB819" }}
+              >
+                Manage rituals →
+              </Link>
+            </Card>
+          </Reveal>
+        </div>
+
+        <Reveal delayMs={160}>
           <Card>
-            <Label>Today</Label>
-            <h2 className="mt-2 text-xl font-normal">What's happening</h2>
-            {todayEvents.length > 0 ? (
+            <Label>This Week</Label>
+            <h2 className="mt-2 text-xl font-normal">Upcoming programming</h2>
+            {upcomingEvents.length > 0 ? (
               <ul className="mt-4 space-y-3">
-                {todayEvents.map((event) => (
+                {upcomingEvents.map((event) => (
                   <EventRow key={`${event.title}-${event.time}`} event={event} />
                 ))}
               </ul>
             ) : (
-              <p className="mt-4 text-sm text-foreground/60 leading-relaxed">
-                Nothing scheduled today — a good day to rest or get ahead.
+              <p className="mt-4 text-sm leading-relaxed text-foreground/60">
+                Nothing on the calendar yet.
               </p>
             )}
           </Card>
-
-          <Card>
-            <Label>Routine Pulse</Label>
-            <h2 className="mt-2 text-xl font-normal">{ritual.name}</h2>
-            <p className="mt-4 text-sm text-foreground/60 leading-relaxed">{ritual.description}</p>
-            <Link
-              to="/routine-pulse"
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-normal"
-              style={{ color: "#3AB819" }}
-            >
-              Manage rituals →
-            </Link>
-          </Card>
-        </div>
-
-        <Card>
-          <Label>This Week</Label>
-          <h2 className="mt-2 text-xl font-normal">Upcoming programming</h2>
-          {upcomingEvents.length > 0 ? (
-            <ul className="mt-4 space-y-3">
-              {upcomingEvents.map((event) => (
-                <EventRow key={`${event.title}-${event.time}`} event={event} />
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 text-sm text-foreground/60 leading-relaxed">
-              Nothing on the calendar yet.
-            </p>
-          )}
-        </Card>
+        </Reveal>
       </div>
     </AppShell>
   );
