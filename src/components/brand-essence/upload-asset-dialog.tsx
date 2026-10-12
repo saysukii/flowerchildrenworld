@@ -120,7 +120,7 @@ export function UploadAssetDialog({
       addedAt: new Date().toISOString(),
       ...partial,
     };
-    appendBrandAsset(asset);
+    await appendBrandAsset(asset);
     onUploaded(asset);
     toast.success(`Added ${asset.name}.`);
     onOpenChange(false);
@@ -246,7 +246,7 @@ export function UploadAssetDialog({
               />
               <Upload className="mx-auto h-5 w-5 text-foreground/40" />
               <p className="mt-2 text-sm font-light text-foreground/70">
-                Images, PDFs, fonts — up to 1.5 MB
+                Images, PDFs, fonts — up to 10 MB
               </p>
               <Button
                 type="button"

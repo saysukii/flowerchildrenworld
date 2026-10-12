@@ -1,6 +1,8 @@
 import { Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { WASH_BUTTON_CLASS } from "@/lib/wash-button";
 import { NoteFormatToolbar } from "@/components/garden/note-format-toolbar";
 import {
   RichTextEditor,
@@ -17,7 +19,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  GARDEN_GREEN,
   GARDEN_NOTE_CARD_COLORS,
   GARDEN_TAGS,
   ensureNoteHtml,
@@ -138,13 +139,15 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
     onClose();
   }, [onClose, onDeleted, userId]);
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4 md:p-6">
       <div className="absolute inset-0 bg-black/25 backdrop-blur-[2px]" onClick={onClose} />
 
       <div className="relative z-10 flex h-[100dvh] w-full max-h-[100dvh] flex-col overflow-hidden rounded-t-3xl bg-[#FCFCFC] shadow-2xl sm:h-auto sm:max-h-[min(92vh,900px)] sm:max-w-2xl sm:rounded-3xl md:max-w-3xl">
         <header className="flex shrink-0 items-center justify-between border-b border-black/5 px-4 py-3 sm:px-6">
-          <p className="text-xs font-light text-foreground/50">
+          <p className="text-xs font-light leading-none text-foreground/50">
             {lastUpdatedAt ? formatNoteDateTime(lastUpdatedAt) : "New note"}
           </p>
           <button
@@ -205,35 +208,21 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-black/5 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
           <div className="inline-flex items-center text-sm font-light leading-none">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-foreground/60 hover:text-foreground"
-            >
-              Close
-            </button>
             {!isNew ? (
-              <>
-                <span
-                  className="mx-2 inline-block h-1 w-1 shrink-0 rounded-full bg-foreground/25"
-                  aria-hidden
-                />
-                <button
-                  type="button"
-                  onClick={() => setDeleteOpen(true)}
-                  className="text-[#C53D3D]/80 hover:text-[#C53D3D]"
-                >
-                  Delete
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => setDeleteOpen(true)}
+                className="text-[#C53D3D]/80 hover:text-[#C53D3D]"
+              >
+                Delete
+              </button>
             ) : null}
           </div>
           <button
             type="button"
             onClick={() => void save()}
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2 text-sm font-normal text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-            style={{ background: GARDEN_GREEN }}
+            className={`inline-flex items-center justify-center gap-2 ${WASH_BUTTON_CLASS}`}
           >
             {saving ? <Loader2 className="size-4 animate-spin" /> : "Save"}
           </button>
@@ -263,7 +252,8 @@ export function NoteEditorPanel({ note, userId, onClose, onSaved, onDeleted }: N
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/app-shell";
 import { Reveal } from "@/components/motion";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { Button } from "@/components/ui/button";
@@ -53,13 +52,21 @@ import {
   loadIntegrations,
   saveIntegrations,
 } from "@/lib/integrations-config";
-import { loadTeamMembers, saveTeamMembers, seedTeamForUser, type TeamMember } from "@/lib/team-members";
+import { listAcceptedTeamEmails } from "@/lib/api/team.functions";
+import {
+  activateTeamMemberByEmail,
+  loadTeamMembers,
+  saveTeamMembers,
+  seedTeamForUser,
+  type TeamMember,
+} from "@/lib/team-members";
 import {
   CONTROLLABLE_PAGES,
   DEFAULT_MEMBER_PAGES,
   normalizePages,
   type PageKey,
 } from "@/lib/page-access";
+import { WASH_BUTTON_CLASS } from "@/lib/wash-button";
 import { getDisplayName, isAdmin } from "@/lib/user-role";
 
 import {
@@ -110,38 +117,37 @@ function SaveButton({
   );
 }
 
-function Section({ label, children }: { label: string; children: ReactNode }) {
+function Section({ label, children }: { label?: string; children: ReactNode }) {
   return (
     <Reveal>
       <section className="border-t border-black/5 pt-8 first:border-t-0 first:pt-0">
-        <h2 className="font-label mb-6 text-[11px] text-foreground/50">{label}</h2>
+        {label ? <h2 className="font-label mb-6 text-[11px] text-foreground/50">{label}</h2> : null}
         {children}
       </section>
     </Reveal>
   );
 }
 
-function StatusBadge({
+function IntegrationStatus({
   connected,
+  connectLabel,
+  connecting,
+  onConnect,
   onDisconnect,
 }: {
   connected: boolean;
-  onDisconnect?: () => void;
+  connectLabel: string;
+  connecting: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
 }) {
-  const className = "inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-light";
-  const style = {
-    background: connected ? "rgba(58,184,25,0.12)" : "rgba(0,0,0,0.05)",
-    color: connected ? GREEN : "rgba(2,2,2,0.5)",
-  };
-
-  if (connected && onDisconnect) {
+  if (connected) {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className={`${className} cursor-pointer items-center gap-1 transition-opacity hover:opacity-75`}
-            style={style}
+            className="inline-flex shrink-0 items-center gap-1 text-sm font-light text-[#1f6b12]"
           >
             Connected
             <ChevronDown className="h-3 w-3" />
@@ -163,9 +169,14 @@ function StatusBadge({
   }
 
   return (
-    <span className={className} style={style}>
-      {connected ? "Connected" : "Disconnected"}
-    </span>
+    <button
+      type="button"
+      onClick={onConnect}
+      disabled={connecting}
+      className={`shrink-0 ${WASH_BUTTON_CLASS}`}
+    >
+      {connecting ? <Loader2 className="size-4 animate-spin" /> : connectLabel}
+    </button>
   );
 }
 
@@ -182,6 +193,8 @@ function SettingsPage() {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [editDraft, setEditDraft] = useState<{
@@ -244,6 +257,20 @@ function SettingsPage() {
         userIsAdmin = isAdmin(user);
         setAdmin(userIsAdmin);
         setTeam(seedTeamForUser(user.email, name, userIsAdmin));
+        const pendingEmails = loadTeamMembers()
+          .filter((member) => member.status === "Pending")
+          .map((member) => member.email);
+        if (userIsAdmin && pendingEmails.length > 0) {
+          void listAcceptedTeamEmails({ data: { emails: pendingEmails } })
+            .then(({ emails }) => {
+              if (emails.length === 0) return;
+              for (const accepted of emails) activateTeamMemberByEmail(accepted);
+              setTeam(loadTeamMembers());
+            })
+            .catch((error) => {
+              console.error(error);
+            });
+        }
       } else {
         setTeam(loadTeamMembers());
       }
@@ -357,7 +384,7 @@ function SettingsPage() {
               name: editDraft.name.trim(),
               email: nextEmail,
               phone: editDraft.phone.trim(),
-              role: editDraft.role,
+              role: editingMember.role === "Admin" ? "Admin" : editDraft.role,
               pages: normalizePages(editDraft.pages),
             }
           : m,
@@ -385,14 +412,6 @@ function SettingsPage() {
       return toast.error("This member is already on the team.");
     }
     setInviting(true);
-    try {
-      await sendTeamInviteEmail({
-        data: { email: trimmed, origin: window.location.origin },
-      });
-    } catch (err) {
-      setInviting(false);
-      return toast.error(err instanceof Error ? err.message : "Could not send invite.");
-    }
     persistTeam([
       ...team,
       {
@@ -406,8 +425,16 @@ function SettingsPage() {
       },
     ]);
     setInviteEmail("");
-    setInviting(false);
-    toast.success("Invite sent — they'll appear as Pending until onboarding is complete.");
+    try {
+      await sendTeamInviteEmail({
+        data: { email: trimmed, origin: window.location.origin },
+      });
+      toast.success("Invite sent. They'll stay Pending until they accept.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send the invite email.");
+    } finally {
+      setInviting(false);
+    }
   }
 
   function confirmRemoveMember() {
@@ -416,6 +443,38 @@ function SettingsPage() {
     persistTeam(team.filter((m) => m.id !== removeTarget.id));
     setRemoveTarget(null);
     toast.success("Member removed.");
+  }
+
+  function isSelf(member: TeamMember) {
+    return member.email.toLowerCase() === email.toLowerCase();
+  }
+
+  async function resendInvite(member: TeamMember) {
+    setResendingId(member.id);
+    try {
+      await sendTeamInviteEmail({
+        data: { email: member.email, origin: window.location.origin },
+      });
+      if (member.status === "Inactive") {
+        persistTeam(team.map((item) => (item.id === member.id ? { ...item, status: "Pending" } : item)));
+      }
+      toast.success("A new invite link was sent.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not resend the invite.");
+    } finally {
+      setResendingId(null);
+    }
+  }
+
+  function deactivateMember(member: TeamMember) {
+    if (isSelf(member)) return;
+    persistTeam(team.map((item) => (item.id === member.id ? { ...item, status: "Inactive" } : item)));
+    toast.success(`${member.name} is inactive.`);
+  }
+
+  function reactivateMember(member: TeamMember) {
+    persistTeam(team.map((item) => (item.id === member.id ? { ...item, status: "Active" } : item)));
+    toast.success(`${member.name} is active.`);
   }
 
   async function connectGoogle() {
@@ -485,15 +544,13 @@ function SettingsPage() {
 
   if (!ready) {
     return (
-      <AppShell>
-        <div className="mx-auto max-w-3xl py-12 text-center text-sm text-foreground/50">Loading…</div>
-      </AppShell>
+      <div className="mx-auto max-w-3xl py-12 text-center text-sm text-foreground/50">Loading…</div>
     );
   }
 
   return (
-    <AppShell>
-      <div className="mx-auto max-w-3xl text-[#020202]" style={{ background: "#FCFCFC" }}>
+    <>
+      <div className="mx-auto max-w-3xl text-[#020202]">
         <header className="mb-8">
           <span className="font-label text-[11px] text-foreground/50">Settings</span>
           <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Your workspace</h1>
@@ -501,7 +558,7 @@ function SettingsPage() {
         </header>
 
         <div className="space-y-8">
-          <Section label="Account">
+          <Section>
             <div className="space-y-6">
               <div className="flex items-center justify-between gap-4">
                 <ProfileAvatar name={displayName} avatarUrl={avatarUrl} size="md" />
@@ -517,7 +574,7 @@ function SettingsPage() {
                     type="button"
                     disabled={uploadingPhoto}
                     onClick={() => photoInputRef.current?.click()}
-                    className="rounded-full border border-black/10 px-3 py-1.5 text-foreground/70 transition-colors hover:bg-black/5 hover:text-foreground disabled:opacity-50"
+                    className="moss-card rounded-full px-3 py-1.5 text-foreground/70 transition-colors hover:bg-white/70 hover:text-foreground disabled:opacity-50"
                   >
                     {uploadingPhoto ? (
                       <Loader2 className="size-3.5 animate-spin" />
@@ -547,32 +604,27 @@ function SettingsPage() {
                   <p className="text-sm font-normal">Reset password</p>
                   <p className="text-xs text-foreground/50">Send a reset link to your email.</p>
                 </div>
-                <Button
+                <button
                   type="button"
-                  variant="outline"
                   onClick={sendResetLink}
                   disabled={sendingReset}
-                  className="rounded-full"
+                  className={WASH_BUTTON_CLASS}
                 >
                   {sendingReset ? <Loader2 className="size-4 animate-spin" /> : "Send reset link"}
-                </Button>
+                </button>
               </div>
             </div>
           </Section>
 
           {admin && (
             <Section label="Team">
-              <p className="mb-5 text-sm font-light text-foreground/60">
-                Click a member to edit their info and page permissions. Auth admins always see every page.
-              </p>
-
               <div className="space-y-3 md:hidden">
-                {team.map((member) => (
+                {team.slice(0, 4).map((member) => (
                   <button
                     key={member.id}
                     type="button"
                     onClick={() => openMemberEditor(member)}
-                    className="w-full rounded-2xl border border-black/5 bg-white p-4 text-left transition-colors hover:bg-black/[0.02]"
+                    className="moss-card w-full rounded-2xl p-4 text-left transition-colors hover:bg-black/[0.02]"
                   >
                     <p className="text-sm font-normal">{member.name}</p>
                     <p className="mt-1 text-xs font-light text-foreground/60">{member.email}</p>
@@ -584,7 +636,7 @@ function SettingsPage() {
                 ))}
               </div>
 
-              <div className="hidden overflow-x-auto rounded-2xl border border-black/5 bg-white md:block">
+              <div className="moss-card hidden overflow-x-auto rounded-2xl md:block">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
@@ -596,7 +648,7 @@ function SettingsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {team.map((member) => (
+                    {team.slice(0, 4).map((member) => (
                       <TableRow
                         key={member.id}
                         className="cursor-pointer"
@@ -615,6 +667,16 @@ function SettingsPage() {
                 </Table>
               </div>
 
+              {team.length > 4 ? (
+                <button
+                  type="button"
+                  onClick={() => setDirectoryOpen(true)}
+                  className="mt-4 text-sm font-light text-foreground/60 hover:text-foreground"
+                >
+                  View all
+                </button>
+              ) : null}
+
               <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1 space-y-2">
                   <Label htmlFor="invite-email">Invite member</Label>
@@ -626,7 +688,14 @@ function SettingsPage() {
                     onChange={(e) => setInviteEmail(e.target.value)}
                   />
                 </div>
-                <SaveButton loading={inviting} onClick={sendInvite} label="Send invite" />
+                <button
+                  type="button"
+                  onClick={sendInvite}
+                  disabled={inviting}
+                  className={WASH_BUTTON_CLASS}
+                >
+                  {inviting ? <Loader2 className="size-4 animate-spin" /> : "Send invite"}
+                </button>
               </div>
             </Section>
           )}
@@ -664,7 +733,9 @@ function SettingsPage() {
             <DialogHeader>
               <DialogTitle className="font-normal">Edit team member</DialogTitle>
               <DialogDescription>
-                Update their details and choose which pages they can open. Home stays on so they can always get back into Inside.
+                {editDraft?.role === "Admin"
+                  ? "Update their details. Admins can open every page."
+                  : "Update their details and choose which pages they can open. Home stays on so they can always get back into Inside."}
               </DialogDescription>
             </DialogHeader>
 
@@ -701,7 +772,8 @@ function SettingsPage() {
                   <div className="space-y-2">
                     <Label htmlFor="member-role">Role</Label>
                     <Select
-                      value={editDraft.role}
+                      value={editingMember?.role === "Admin" ? "Admin" : editDraft.role}
+                      disabled={editingMember?.role === "Admin"}
                       onValueChange={(value: TeamMember["role"]) =>
                         setEditDraft({ ...editDraft, role: value })
                       }
@@ -717,14 +789,13 @@ function SettingsPage() {
                   </div>
                 </div>
 
+                {editDraft.role === "Admin" ? null : (
                 <div>
                   <p className="mb-2 text-sm font-normal">Permissions</p>
                   <p className="mb-3 text-xs font-light text-foreground/50">
-                    {editDraft.role === "Admin"
-                      ? "Workspace Admins always see every page. These still apply if this person signs in as a member."
-                      : "Choose which pages this member can open."}
+                    Choose which pages this member can open.
                   </p>
-                  <div className="space-y-1 rounded-2xl border border-black/5 bg-background p-2">
+                  <div className="moss-card space-y-1 rounded-2xl p-2">
                     {CONTROLLABLE_PAGES.map((page) => {
                       const checked = editDraft.pages.includes(page.key);
                       const locked = page.key === "dashboard";
@@ -756,20 +827,46 @@ function SettingsPage() {
                     })}
                   </div>
                 </div>
+                )}
               </div>
             ) : null}
 
-            <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
-              {editingMember && editingMember.email.toLowerCase() !== email.toLowerCase() ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRemoveTarget(editingMember);
-                  }}
-                  className="order-last text-xs text-foreground/45 hover:text-[#C53D3D] sm:order-first"
-                >
-                  Remove member
-                </button>
+            <DialogFooter className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              {editingMember && !isSelf(editingMember) ? (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <button
+                    type="button"
+                    disabled={resendingId === editingMember.id}
+                    onClick={() => void resendInvite(editingMember)}
+                    className="text-xs font-light text-foreground/55 hover:text-foreground disabled:opacity-50"
+                  >
+                    {resendingId === editingMember.id ? "Sending…" : "Resend invite"}
+                  </button>
+                  {editingMember.status === "Inactive" ? (
+                    <button
+                      type="button"
+                      onClick={() => reactivateMember(editingMember)}
+                      className="text-xs font-light text-foreground/55 hover:text-foreground"
+                    >
+                      Reactivate
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => deactivateMember(editingMember)}
+                      className="text-xs font-light text-foreground/45 hover:text-[#C53D3D]"
+                    >
+                      Deactivate
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setRemoveTarget(editingMember)}
+                    className="text-xs font-light text-foreground/45 hover:text-[#C53D3D]"
+                  >
+                    Remove member
+                  </button>
+                </div>
               ) : (
                 <span />
               )}
@@ -780,6 +877,69 @@ function SettingsPage() {
                 <SaveButton onClick={saveMemberEdits} label="Save member" />
               </div>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={directoryOpen} onOpenChange={setDirectoryOpen}>
+          <DialogContent
+            aria-describedby={undefined}
+            className="moss-dialog max-w-lg gap-0 overflow-hidden p-0 shadow-none"
+          >
+            <DialogHeader className="border-b border-black/5 px-6 py-4 text-left">
+              <DialogTitle className="font-normal">Team</DialogTitle>
+            </DialogHeader>
+            <ul className="max-h-[min(70dvh,32rem)] overflow-y-auto">
+              {team.map((member) => (
+                <li
+                  key={member.id}
+                  className="flex items-start justify-between gap-4 border-b border-black/5 px-6 py-3 last:border-b-0"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDirectoryOpen(false);
+                      openMemberEditor(member);
+                    }}
+                    className="min-w-0 text-left"
+                  >
+                    <p className="text-sm font-normal">{member.name}</p>
+                    <p className="mt-0.5 truncate text-xs font-light text-foreground/55">{member.email}</p>
+                    <p className="mt-1 text-xs font-light text-foreground/45">
+                      {member.role} · {member.status}
+                    </p>
+                  </button>
+                  {!isSelf(member) ? (
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <button
+                        type="button"
+                        disabled={resendingId === member.id}
+                        onClick={() => void resendInvite(member)}
+                        className="text-xs font-light text-foreground/55 hover:text-foreground disabled:opacity-50"
+                      >
+                        {resendingId === member.id ? "Sending…" : "Resend invite"}
+                      </button>
+                      {member.status === "Inactive" ? (
+                        <button
+                          type="button"
+                          onClick={() => reactivateMember(member)}
+                          className="text-xs font-light text-foreground/55 hover:text-foreground"
+                        >
+                          Reactivate
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => deactivateMember(member)}
+                          className="text-xs font-light text-foreground/45 hover:text-[#C53D3D]"
+                        >
+                          Deactivate
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
           </DialogContent>
         </Dialog>
 
@@ -804,7 +964,7 @@ function SettingsPage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </AppShell>
+    </>
   );
 }
 
@@ -828,29 +988,23 @@ function IntegrationCard({
   onDisconnect: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-4 sm:p-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <div className="moss-card rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <p className="text-sm font-normal">{title}</p>
           <p className="text-xs text-foreground/50">{description}</p>
+          {connected && accountName ? (
+            <p className="mt-2 text-sm font-light text-foreground/70">{accountName}</p>
+          ) : null}
         </div>
-        <StatusBadge connected={connected} onDisconnect={connected ? onDisconnect : undefined} />
+        <IntegrationStatus
+          connected={connected}
+          connectLabel={connectLabel}
+          connecting={connecting}
+          onConnect={onConnect}
+          onDisconnect={onDisconnect}
+        />
       </div>
-      {connected ? (
-        accountName ? (
-          <p className="mt-4 text-sm font-light text-foreground/70">{accountName}</p>
-        ) : null
-      ) : (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onConnect}
-          disabled={connecting}
-          className="mt-4 rounded-full"
-        >
-          {connecting ? <Loader2 className="size-4 animate-spin" /> : connectLabel}
-        </Button>
-      )}
     </div>
   );
 }

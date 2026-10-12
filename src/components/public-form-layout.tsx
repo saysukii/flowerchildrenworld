@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import fcwFullLogo from "@/assets/fcw-full-logo.png.asset.json";
+import { MeadowGround } from "@/components/meadow-ground";
 import { PageEnter } from "@/components/motion";
 
 export function PublicFormFooter() {
@@ -23,7 +24,7 @@ export function PublicFormLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen w-full bg-background text-foreground flex flex-col">
+    <MeadowGround className="flex w-full flex-col text-foreground">
       {/* Header */}
       <header className="flex items-center justify-center px-4 pb-0 pt-4 sm:px-8">
         <img
@@ -42,14 +43,14 @@ export function PublicFormLayout({
             <p className="mt-3 text-sm font-light text-foreground/60">{subtitle}</p>
           </div>
 
-          <section className="rounded-3xl border border-black/5 bg-white px-6 py-7 sm:px-8 sm:py-9">
+          <section className="moss-card rounded-3xl px-6 py-7 sm:px-8 sm:py-9">
             {children}
           </section>
         </PageEnter>
       </main>
 
       <PublicFormFooter />
-    </div>
+    </MeadowGround>
   );
 }
 

@@ -1,15 +1,35 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Search, X } from "lucide-react";
-import { AppShell } from "@/components/app-shell";
+import { CalendarDays, ChevronDown, MoreHorizontal, Plus, Search } from "lucide-react";
 import { Reveal } from "@/components/motion";
 import { PageLabel } from "@/components/page-label";
 import { SheetsImportButton, SheetsImportDialog } from "@/components/community/sheets-import-dialog";
+import { WASH_BUTTON_CLASS } from "@/lib/wash-button";
 import {
-  FILTER_CONTROL_CLASS,
-  FILTER_INPUT_CLASS,
-  COMMUNITY_PRIMARY_BUTTON_CLASS,
-} from "@/components/community/filter-control-styles";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FILTER_INPUT_CLASS } from "@/components/community/filter-control-styles";
 import {
   type ChildRecord,
   type CommunityStore,
@@ -18,16 +38,27 @@ import {
   type PartnerRecord,
   type VolunteerRecord,
   appendRecordsForTab,
+  COMMUNITY_UPDATED_EVENT,
+  deleteCommunityRecord,
   filterRecords,
   formatChildRow,
+  formatDob,
   formatGuardianRow,
   formatPartnerRow,
   formatVolunteerRow,
   loadCommunityStore,
+  replaceRecord,
+  todayAddedAt,
+  toDateInputValue,
   saveChildWithGuardian,
   saveCommunityStore,
+  saveEditedChild,
+  updateGuardianRecord,
 } from "@/lib/community";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { loadIntegrations } from "@/lib/integrations-config";
+import { isAdmin } from "@/lib/user-role";
 
 export const Route = createFileRoute("/_authenticated/community")({
   head: () => ({
@@ -56,7 +87,7 @@ const TABS: TabConfig[] = [
     label: "Children",
     addLabel: "Add child",
     searchPlaceholder: "Search children...",
-    columns: ["Name", "Program", "Status", "DOB", "Actions"],
+    columns: ["Status", "Name", "Program", "DOB", "Actions"],
     emptyState: "No children added yet. Start building the village.",
   },
   {
@@ -64,7 +95,7 @@ const TABS: TabConfig[] = [
     label: "Guardians",
     addLabel: "Add guardian",
     searchPlaceholder: "Search guardians...",
-    columns: ["Name", "Email", "Phone", "Linked Children", "Actions"],
+    columns: ["Status", "Name", "Email", "Phone", "Linked Children", "Actions"],
     emptyState: "No guardians added yet.",
   },
   {
@@ -72,7 +103,7 @@ const TABS: TabConfig[] = [
     label: "Volunteers",
     addLabel: "Add volunteer",
     searchPlaceholder: "Search volunteers...",
-    columns: ["Name", "Email", "Phone", "Skills", "Status", "Actions"],
+    columns: ["Status", "Name", "Email", "Phone", "Skills", "Actions"],
     emptyState: "No volunteers yet. Share your /join link to get started.",
   },
   {
@@ -80,26 +111,110 @@ const TABS: TabConfig[] = [
     label: "Partners",
     addLabel: "Add partner",
     searchPlaceholder: "Search partners...",
-    columns: ["Name", "Organization", "Email", "Partnership Type", "Status", "Actions"],
+    columns: ["Status", "Name", "Organization", "Email", "Partnership Type", "Actions"],
     emptyState: "No partners yet. Share your /partner link to grow the network.",
   },
 ];
 
+type CommunityRecord = ChildRecord | GuardianRecord | VolunteerRecord | PartnerRecord;
+
+function recordLabel(record: CommunityRecord) {
+  if ("fullName" in record && "dateOfBirth" in record) return record.fullName;
+  if ("guardianName" in record) return record.guardianName;
+  if ("fullName" in record) return record.fullName;
+  return record.organizationName;
+}
+
+function RecordMenu({ label, onEdit, onDelete }: { label: string; onEdit: () => void; onDelete: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Actions for ${label}`}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground/55 hover:bg-black/5 hover:text-foreground"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="moss-dialog min-w-36">
+        <DropdownMenuItem className="font-normal" onSelect={onEdit}>
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem className="font-normal text-[#C53D3D] focus:text-[#C53D3D]" onSelect={onDelete}>
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const nameCell = "whitespace-nowrap px-5 py-3.5 text-sm font-normal text-foreground";
+const metaCell = "whitespace-nowrap px-5 py-3.5 text-sm font-light text-foreground/50";
+const statusCell = "whitespace-nowrap px-5 py-3.5 text-sm";
+
+const TYPE_DOT: Record<string, string> = {
+  "Full-Time": "bg-[#3AB819]",
+  "Drop-In": "bg-[#E0B15A]",
+  Event: "bg-[#6E93B8]",
+  Community: "bg-[#3AB819]",
+  Corporate: "bg-[#020202]",
+  Media: "bg-[#D4896A]",
+  Other: "bg-foreground/35",
+};
+
+function StatusMark({ value }: { value: string }) {
+  const active = value === "Active";
+  return (
+    <span
+      className={[
+        "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-normal",
+        active ? "bg-[#3AB819]/15 text-[#1f6b12]" : "bg-black/[0.05] text-foreground/55",
+      ].join(" ")}
+    >
+      {value}
+    </span>
+  );
+}
+
+function TypeMark({ value }: { value: string }) {
+  if (!value || value === "—") return <span className="text-foreground/50">—</span>;
+  return (
+    <span className="inline-flex items-center gap-2 text-sm font-light text-foreground/70">
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", TYPE_DOT[value] ?? "bg-foreground/35")} />
+      {value}
+    </span>
+  );
+}
+
 function MobileRecordCard({
   title,
   lines,
+  menu,
 }: {
   title: string;
   lines: { label: string; value: string }[];
+  menu?: React.ReactNode;
 }) {
   return (
     <div className="px-4 py-4">
-      <p className="text-sm font-normal">{title}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-normal text-foreground">{title}</p>
+        {menu}
+      </div>
       <dl className="mt-2 space-y-1">
         {lines.map((line) => (
-          <div key={line.label} className="flex gap-2 text-xs font-light">
-            <dt className="w-20 shrink-0 text-foreground/45">{line.label}</dt>
-            <dd className="text-foreground/70">{line.value}</dd>
+          <div key={line.label} className="flex items-center gap-2 text-xs font-light">
+            <dt className="w-20 shrink-0 text-foreground/40">{line.label}</dt>
+            <dd className="text-foreground/50">
+              {line.label === "Status" ? (
+                <StatusMark value={line.value} />
+              ) : line.label === "Program" || line.label === "Type" ? (
+                <TypeMark value={line.value} />
+              ) : (
+                line.value
+              )}
+            </dd>
           </div>
         ))}
       </dl>
@@ -110,7 +225,9 @@ function MobileRecordCard({
 function CommunityPage() {
   const [tab, setTab] = useState<TabKey>("children");
   const [query, setQuery] = useState("");
-  const [addOpen, setAddOpen] = useState(false);
+  const [editor, setEditor] = useState<{ mode: "add" } | { mode: "edit"; record: CommunityRecord } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CommunityRecord | null>(null);
+  const [admin, setAdmin] = useState(false);
   const [sheetsImportOpen, setSheetsImportOpen] = useState(false);
   const [defaultSpreadsheetId, setDefaultSpreadsheetId] = useState("");
   const [store, setStore] = useState<CommunityStore>({
@@ -121,16 +238,34 @@ function CommunityPage() {
   });
   const [ready, setReady] = useState(false);
   const active = useMemo(() => TABS.find((t) => t.key === tab)!, [tab]);
+  const columns = admin ? active.columns : active.columns.filter((column) => column !== "Actions");
 
   useEffect(() => {
     setStore(loadCommunityStore());
     setDefaultSpreadsheetId(loadIntegrations().google.spreadsheetId ?? "");
     setReady(true);
+
+    void supabase.auth.getSession().then(({ data }) => {
+      setAdmin(isAdmin(data.session?.user));
+    });
+
+    function refreshStore() {
+      setStore(loadCommunityStore());
+    }
+    function onStorage(event: StorageEvent) {
+      if (event.key === "fcw-community") refreshStore();
+    }
+    window.addEventListener(COMMUNITY_UPDATED_EVENT, refreshStore);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(COMMUNITY_UPDATED_EVENT, refreshStore);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   const persist = useCallback((next: CommunityStore) => {
-    setStore(next);
     saveCommunityStore(next);
+    setStore(next);
   }, []);
 
   const filteredChildren = useMemo(
@@ -140,7 +275,7 @@ function CommunityPage() {
   );
   const filteredGuardians = useMemo(
     () =>
-      filterRecords(store.guardians, query, ["guardianName", "email", "phone", "linkedChildren"]),
+      filterRecords(store.guardians, query, ["guardianName", "email", "phone", "linkedChildren", "status"]),
     [store.guardians, query],
   );
   const filteredVolunteers = useMemo(
@@ -160,12 +295,44 @@ function CommunityPage() {
     [store.partners, query],
   );
 
-  function handleImport(records: ChildRecord[] | GuardianRecord[] | VolunteerRecord[] | PartnerRecord[]) {
-    persist(appendRecordsForTab(store, tab, records));
+  function handleImport(records: CommunityRecord[]) {
+    if (tab === "children") persist(appendRecordsForTab(store, tab, records as ChildRecord[]));
+    else if (tab === "guardians") persist(appendRecordsForTab(store, tab, records as GuardianRecord[]));
+    else if (tab === "volunteers") persist(appendRecordsForTab(store, tab, records as VolunteerRecord[]));
+    else persist(appendRecordsForTab(store, tab, records as PartnerRecord[]));
   }
 
-  function handleSaveRecord(record: ChildRecord | GuardianRecord | VolunteerRecord | PartnerRecord) {
-    persist(appendRecordsForTab(store, tab, [record]));
+  function handleSaveRecord(record: CommunityRecord) {
+    const next =
+      editor?.mode === "edit" ? record : { ...record, addedAt: record.addedAt || todayAddedAt() };
+    if (editor?.mode === "edit") {
+      if (tab === "guardians" && "guardianName" in next) {
+        persist(updateGuardianRecord(store, next));
+        return;
+      }
+      if (tab === "volunteers" && "availability" in next) {
+        persist({ ...store, volunteers: replaceRecord(store.volunteers, next) });
+        return;
+      }
+      if (tab === "partners" && "organizationName" in next) {
+        persist({ ...store, partners: replaceRecord(store.partners, next) });
+        return;
+      }
+    }
+    if (tab === "children" && "dateOfBirth" in next) persist(appendRecordsForTab(store, tab, [next]));
+    else if (tab === "guardians" && "guardianName" in next) persist(appendRecordsForTab(store, tab, [next]));
+    else if (tab === "volunteers" && "availability" in next) persist(appendRecordsForTab(store, tab, [next]));
+    else if (tab === "partners" && "organizationName" in next) persist(appendRecordsForTab(store, tab, [next]));
+  }
+
+  function handleSaveChildEdit(
+    child: ChildRecord,
+    guardian:
+      | { mode: "existing"; guardian: GuardianRecord }
+      | { mode: "new"; guardian: GuardianRecord }
+      | null,
+  ) {
+    persist(saveEditedChild(store, child, guardian));
   }
 
   function handleSaveChild(
@@ -175,7 +342,11 @@ function CommunityPage() {
       | { mode: "new"; guardian: Omit<GuardianRecord, "id" | "linkedChildren"> }
       | null,
   ) {
-    const childRecord: ChildRecord = { id: crypto.randomUUID(), ...child };
+    const childRecord: ChildRecord = {
+      id: crypto.randomUUID(),
+      ...child,
+      addedAt: todayAddedAt(),
+    };
 
     if (!guardian) {
       persist(appendRecordsForTab(store, "children", [childRecord]));
@@ -196,29 +367,43 @@ function CommunityPage() {
       id: crypto.randomUUID(),
       ...guardian.guardian,
       linkedChildren: "",
+      addedAt: todayAddedAt(),
     };
     persist(saveChildWithGuardian(store, childRecord, newGuardian, true));
   }
 
   return (
-    <AppShell>
-      <div className="mx-auto max-w-6xl pb-[calc(2.625rem+max(1.5rem,env(safe-area-inset-bottom)))] md:pb-[4.125rem]">
-        {/* Header */}
+    <>
+      <div className="mx-auto max-w-6xl">
         <Reveal>
-          <header className="mb-6 sm:mb-8">
-            <PageLabel>Community</PageLabel>
-            <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">The village directory</h1>
-            <p className="mt-2 text-sm text-foreground/60">
-              Children, guardians, volunteers, and partners — one tidy home.
-            </p>
+          <header className="mb-6 flex items-start justify-between gap-4 sm:mb-8">
+            <div className="min-w-0">
+              <PageLabel>Community</PageLabel>
+              <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">The village directory</h1>
+              <p className="mt-2 text-sm text-foreground/60">
+                Children, guardians, volunteers, and partners — one tidy home.
+              </p>
+            </div>
+            {admin ? (
+              <div className="mt-1 flex shrink-0 items-center gap-2">
+                <SheetsImportButton onClick={() => setSheetsImportOpen(true)} iconOnly />
+                <button
+                  type="button"
+                  onClick={() => setEditor({ mode: "add" })}
+                  aria-label={active.addLabel}
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 ${WASH_BUTTON_CLASS}`}
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden min-[420px]:inline">{active.addLabel}</span>
+                </button>
+              </div>
+            ) : null}
           </header>
         </Reveal>
 
         {/* Search, actions, and tabs */}
         <Reveal delayMs={60} className="mb-5 flex flex-col gap-3">
-          <div
-            className={`relative overflow-hidden pl-9 pr-3 focus-within:border-foreground/30 ${FILTER_CONTROL_CLASS}`}
-          >
+          <div className="moss-card relative flex h-10 w-full min-w-0 items-center overflow-hidden rounded-full pl-9 pr-3 focus-within:ring-1 focus-within:ring-black/10">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40" />
             <input
               type="text"
@@ -256,7 +441,7 @@ function CommunityPage() {
 
         {/* Records */}
         <Reveal delayMs={100}>
-        <section className="overflow-hidden rounded-3xl border border-black/5 bg-white">
+        <section className="moss-card min-w-0 overflow-hidden rounded-3xl">
           <div className="md:hidden divide-y divide-black/5">
             {!ready ? (
               <p className="px-4 py-16 text-center text-sm text-foreground/50">Loading…</p>
@@ -267,9 +452,10 @@ function CommunityPage() {
                   <MobileRecordCard
                     key={child.id}
                     title={row.name}
+                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: child })} onDelete={() => setDeleteTarget(child)} /> : undefined}
                     lines={[
-                      { label: "Program", value: row.program },
                       { label: "Status", value: row.status },
+                      { label: "Program", value: row.program },
                       { label: "DOB", value: row.dob || "—" },
                     ]}
                   />
@@ -282,7 +468,9 @@ function CommunityPage() {
                   <MobileRecordCard
                     key={guardian.id}
                     title={row.name}
+                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: guardian })} onDelete={() => setDeleteTarget(guardian)} /> : undefined}
                     lines={[
+                      { label: "Status", value: row.status },
                       { label: "Email", value: row.email || "—" },
                       { label: "Phone", value: row.phone || "—" },
                       { label: "Children", value: row.linkedChildren || "—" },
@@ -297,11 +485,12 @@ function CommunityPage() {
                   <MobileRecordCard
                     key={volunteer.id}
                     title={row.name}
+                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: volunteer })} onDelete={() => setDeleteTarget(volunteer)} /> : undefined}
                     lines={[
+                      { label: "Status", value: row.status },
                       { label: "Email", value: row.email || "—" },
                       { label: "Phone", value: row.phone || "—" },
                       { label: "Skills", value: row.skills || "—" },
-                      { label: "Status", value: row.status },
                     ]}
                   />
                 );
@@ -313,11 +502,12 @@ function CommunityPage() {
                   <MobileRecordCard
                     key={partner.id}
                     title={row.name}
+                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: partner })} onDelete={() => setDeleteTarget(partner)} /> : undefined}
                     lines={[
+                      { label: "Status", value: row.status },
                       { label: "Organization", value: row.organization },
                       { label: "Email", value: row.email || "—" },
                       { label: "Type", value: row.partnershipType },
-                      { label: "Status", value: row.status },
                     ]}
                   />
                 );
@@ -330,10 +520,17 @@ function CommunityPage() {
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-black/5 text-xs font-light uppercase tracking-wider text-foreground/50">
-                  {active.columns.map((col) => (
-                    <th key={col} className="px-5 py-3 font-light">
-                      {col}
+                <tr className="border-b border-black/5 text-[11px] font-normal text-foreground/40">
+                  {columns.map((col) => (
+                    <th
+                      key={col}
+                      className={
+                        col === "Actions"
+                          ? "whitespace-nowrap px-3 py-3 text-right font-normal"
+                          : "whitespace-nowrap px-5 py-3 font-normal"
+                      }
+                    >
+                      {col === "Actions" ? <span className="sr-only">Actions</span> : col}
                     </th>
                   ))}
                 </tr>
@@ -341,7 +538,7 @@ function CommunityPage() {
               <tbody>
                 {!ready ? (
                   <tr>
-                    <td colSpan={active.columns.length} className="px-5 py-16 text-center text-sm text-foreground/50">
+                    <td colSpan={columns.length} className="px-5 py-16 text-center text-sm text-foreground/50">
                       Loading…
                     </td>
                   </tr>
@@ -350,11 +547,19 @@ function CommunityPage() {
                     const row = formatChildRow(child);
                     return (
                       <tr key={child.id} className="border-b border-black/5 last:border-0">
-                        <td className="px-5 py-4 font-light">{row.name}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.program}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.status}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.dob || "—"}</td>
-                        <td className="px-5 py-4" />
+                        <td className={statusCell}>
+                          <StatusMark value={row.status} />
+                        </td>
+                        <td className={nameCell} title={row.name}>{row.name}</td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm">
+                          <TypeMark value={row.program} />
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm font-light tabular-nums text-foreground/50">{row.dob || "—"}</td>
+                        {admin ? (
+                          <td className="px-3 py-2 text-right">
+                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: child })} onDelete={() => setDeleteTarget(child)} />
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })
@@ -363,11 +568,18 @@ function CommunityPage() {
                     const row = formatGuardianRow(guardian);
                     return (
                       <tr key={guardian.id} className="border-b border-black/5 last:border-0">
-                        <td className="px-5 py-4 font-light">{row.name}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.email || "—"}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.phone || "—"}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.linkedChildren || "—"}</td>
-                        <td className="px-5 py-4" />
+                        <td className={statusCell}>
+                          <StatusMark value={row.status} />
+                        </td>
+                        <td className={nameCell} title={row.name}>{row.name}</td>
+                        <td className={metaCell} title={row.email}>{row.email || "—"}</td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm font-light text-foreground/50">{row.phone || "—"}</td>
+                        <td className={metaCell} title={row.linkedChildren}>{row.linkedChildren || "—"}</td>
+                        {admin ? (
+                          <td className="px-3 py-2 text-right">
+                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: guardian })} onDelete={() => setDeleteTarget(guardian)} />
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })
@@ -376,12 +588,20 @@ function CommunityPage() {
                     const row = formatVolunteerRow(volunteer);
                     return (
                       <tr key={volunteer.id} className="border-b border-black/5 last:border-0">
-                        <td className="px-5 py-4 font-light">{row.name}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.email || "—"}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.phone || "—"}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.skills || "—"}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.status}</td>
-                        <td className="px-5 py-4" />
+                        <td className={statusCell}>
+                          <StatusMark value={row.status} />
+                        </td>
+                        <td className={nameCell} title={row.name}>{row.name}</td>
+                        <td className={metaCell} title={row.email}>{row.email || "—"}</td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm font-light text-foreground/50">{row.phone || "—"}</td>
+                        <td className={metaCell} title={row.skills}>
+                          <span className="block max-w-[9rem] truncate">{row.skills || "—"}</span>
+                        </td>
+                        {admin ? (
+                          <td className="px-3 py-2 text-right">
+                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: volunteer })} onDelete={() => setDeleteTarget(volunteer)} />
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })
@@ -390,18 +610,26 @@ function CommunityPage() {
                     const row = formatPartnerRow(partner);
                     return (
                       <tr key={partner.id} className="border-b border-black/5 last:border-0">
-                        <td className="px-5 py-4 font-light">{row.name}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.organization}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.email || "—"}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.partnershipType}</td>
-                        <td className="px-5 py-4 font-light text-foreground/70">{row.status}</td>
-                        <td className="px-5 py-4" />
+                        <td className={statusCell}>
+                          <StatusMark value={row.status} />
+                        </td>
+                        <td className={nameCell} title={row.name}>{row.name}</td>
+                        <td className={metaCell} title={row.organization}>{row.organization}</td>
+                        <td className={metaCell} title={row.email}>{row.email || "—"}</td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm">
+                          <TypeMark value={row.partnershipType} />
+                        </td>
+                        {admin ? (
+                          <td className="px-3 py-2 text-right">
+                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: partner })} onDelete={() => setDeleteTarget(partner)} />
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={active.columns.length} className="px-5 py-16 text-center text-sm text-foreground/50">
+                    <td colSpan={columns.length} className="px-5 py-16 text-center text-sm text-foreground/50">
                       {active.emptyState}
                     </td>
                   </tr>
@@ -413,24 +641,6 @@ function CommunityPage() {
         </Reveal>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur md:left-64">
-        <div className="mx-auto flex max-w-6xl items-center justify-end gap-2 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 md:px-8 md:pb-6 lg:px-10">
-          <SheetsImportButton
-            onClick={() => setSheetsImportOpen(true)}
-            iconOnly
-          />
-
-          <button
-            onClick={() => setAddOpen(true)}
-            aria-label={active.addLabel}
-            className={`${COMMUNITY_PRIMARY_BUTTON_CLASS} !w-[42px] !px-0 shrink-0`}
-            style={{ background: "#3AB819" }}
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-          </button>
-        </div>
-      </div>
-
       <SheetsImportDialog
         tab={tab}
         tabLabel={active.label}
@@ -440,30 +650,75 @@ function CommunityPage() {
         defaultSpreadsheetId={defaultSpreadsheetId}
       />
 
-      {addOpen && (
-        <AddRecordDrawer
+      {editor ? (
+        <AddRecordDialog
+          key={editor.mode === "edit" ? editor.record.id : "new"}
           tab={active}
           guardians={store.guardians}
-          onClose={() => setAddOpen(false)}
+          childrenRecords={store.children}
+          initial={editor.mode === "edit" ? editor.record : null}
+          onClose={() => setEditor(null)}
           onSave={handleSaveRecord}
           onSaveChild={handleSaveChild}
+          onSaveChildEdit={handleSaveChildEdit}
         />
-      )}
-    </AppShell>
+      ) : null}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-normal">Delete {deleteTarget ? recordLabel(deleteTarget) : "this record"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the record from the village directory. Linked names are updated with it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!deleteTarget) return;
+                persist(deleteCommunityRecord(store, tab, deleteTarget.id));
+                setDeleteTarget(null);
+              }}
+              className="bg-[#C53D3D] text-white hover:bg-[#C53D3D]/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
-function AddRecordDrawer({
+function emptyGuardianFields() {
+  return {
+    guardianName: "",
+    email: "",
+    phone: "",
+    emergencyContactName: "",
+    emergencyContactPhone: "",
+    linkedChildren: "",
+    status: "Active",
+  };
+}
+
+function AddRecordDialog({
   tab,
   guardians,
+  childrenRecords,
+  initial,
   onClose,
   onSave,
   onSaveChild,
+  onSaveChildEdit,
 }: {
   tab: TabConfig;
   guardians: GuardianRecord[];
+  childrenRecords: ChildRecord[];
+  initial: CommunityRecord | null;
   onClose: () => void;
-  onSave: (record: ChildRecord | GuardianRecord | VolunteerRecord | PartnerRecord) => void;
+  onSave: (record: CommunityRecord) => void;
   onSaveChild: (
     child: Omit<ChildRecord, "id">,
     guardian:
@@ -471,54 +726,72 @@ function AddRecordDrawer({
       | { mode: "new"; guardian: Omit<GuardianRecord, "id" | "linkedChildren"> }
       | null,
   ) => void;
+  onSaveChildEdit: (
+    child: ChildRecord,
+    guardian:
+      | { mode: "existing"; guardian: GuardianRecord }
+      | { mode: "new"; guardian: GuardianRecord }
+      | null,
+  ) => void;
 }) {
+  const initialChild = initial && "dateOfBirth" in initial ? initial : null;
+  const initialGuardian = initial && "guardianName" in initial ? initial : null;
+  const initialVolunteer = initial && "availability" in initial ? initial : null;
+  const initialPartner = initial && "organizationName" in initial ? initial : null;
+  const linkedGuardian = initialChild
+    ? guardians.find((guardian) => guardian.id === initialChild.guardianId) ?? null
+    : null;
+
   const [childForm, setChildForm] = useState({
-    fullName: "",
-    dateOfBirth: "",
-    program: "Full-Time",
-    status: "Active",
-    enrollmentDate: "",
-    guardianId: "",
-    guardianLink: "",
-    notes: "",
+    fullName: initialChild?.fullName ?? "",
+    dateOfBirth: toDateInputValue(initialChild?.dateOfBirth ?? ""),
+    program: initialChild?.program || "Full-Time",
+    status: initialChild?.status || "Active",
+    enrollmentDate: toDateInputValue(initialChild?.enrollmentDate ?? ""),
+    guardianId: initialChild?.guardianId ?? "",
+    guardianLink: initialChild?.guardianLink ?? "",
+    notes: initialChild?.notes ?? "",
   });
   const [guardianMode, setGuardianMode] = useState<"existing" | "new">(
     guardians.length > 0 ? "existing" : "new",
   );
-  const [selectedGuardianId, setSelectedGuardianId] = useState("");
+  const [selectedGuardianId, setSelectedGuardianId] = useState(linkedGuardian?.id ?? "");
   const [newGuardianForm, setNewGuardianForm] = useState({
     guardianName: "",
     email: "",
     phone: "",
     emergencyContactName: "",
     emergencyContactPhone: "",
-  });
-  const [guardianForm, setGuardianForm] = useState({
-    guardianName: "",
-    email: "",
-    phone: "",
-    emergencyContactName: "",
-    emergencyContactPhone: "",
-    linkedChildren: "",
-  });
-  const [volunteerForm, setVolunteerForm] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    skills: "",
-    availability: "",
-    status: "Active",
-    source: "Website form",
-  });
-  const [partnerForm, setPartnerForm] = useState({
-    organizationName: "",
-    contactName: "",
-    email: "",
-    phone: "",
-    partnershipType: "Community",
-    notes: "",
     status: "Active",
   });
+  const [connectedGuardian, setConnectedGuardian] = useState(
+    linkedGuardian ?? { id: "", ...emptyGuardianFields() },
+  );
+  const [guardianForm, setGuardianForm] = useState(
+    initialGuardian ?? emptyGuardianFields(),
+  );
+  const [volunteerForm, setVolunteerForm] = useState(
+    initialVolunteer ?? {
+      fullName: "",
+      email: "",
+      phone: "",
+      skills: "",
+      availability: "",
+      status: "Active",
+      source: "Website form",
+    },
+  );
+  const [partnerForm, setPartnerForm] = useState(
+    initialPartner ?? {
+      organizationName: "",
+      contactName: "",
+      email: "",
+      phone: "",
+      partnershipType: "Community",
+      notes: "",
+      status: "Active",
+    },
+  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -533,7 +806,28 @@ function AddRecordDrawer({
         guardianLink: "",
       };
 
-      if (guardianMode === "existing" && selectedGuardianId) {
+      if (initialChild) {
+        const creating = connectedGuardian.id === "new" || !connectedGuardian.id;
+        const guardianPayload = connectedGuardian.guardianName.trim()
+          ? {
+              mode: creating ? ("new" as const) : ("existing" as const),
+              guardian: {
+                ...connectedGuardian,
+                id: creating ? crypto.randomUUID() : connectedGuardian.id,
+                guardianName: connectedGuardian.guardianName.trim(),
+                email: connectedGuardian.email.trim(),
+                phone: connectedGuardian.phone.trim(),
+                emergencyContactName: connectedGuardian.emergencyContactName.trim(),
+                emergencyContactPhone: connectedGuardian.emergencyContactPhone.trim(),
+                addedAt: creating ? todayAddedAt() : connectedGuardian.addedAt,
+              },
+            }
+          : null;
+        onSaveChildEdit(
+          { id: initialChild.id, ...child, addedAt: initialChild.addedAt },
+          guardianPayload,
+        );
+      } else if (guardianMode === "existing" && selectedGuardianId) {
         onSaveChild(child, { mode: "existing", guardianId: selectedGuardianId });
       } else if (guardianMode === "new" && newGuardianForm.guardianName.trim()) {
         onSaveChild(child, {
@@ -544,6 +838,7 @@ function AddRecordDrawer({
             phone: newGuardianForm.phone.trim(),
             emergencyContactName: newGuardianForm.emergencyContactName.trim(),
             emergencyContactPhone: newGuardianForm.emergencyContactPhone.trim(),
+            status: newGuardianForm.status || "Active",
           },
         });
       } else {
@@ -551,49 +846,79 @@ function AddRecordDrawer({
       }
     } else if (tab.key === "guardians") {
       if (!guardianForm.guardianName.trim()) return;
-      onSave({ id, ...guardianForm, guardianName: guardianForm.guardianName.trim() });
+      onSave({ id: initialGuardian?.id ?? id, ...guardianForm, guardianName: guardianForm.guardianName.trim() });
     } else if (tab.key === "volunteers") {
       if (!volunteerForm.fullName.trim()) return;
-      onSave({ id, ...volunteerForm, fullName: volunteerForm.fullName.trim() });
+      onSave({ id: initialVolunteer?.id ?? id, ...volunteerForm, fullName: volunteerForm.fullName.trim() });
     } else {
       if (!partnerForm.organizationName.trim()) return;
-      onSave({ id, ...partnerForm, organizationName: partnerForm.organizationName.trim() });
+      onSave({
+        id: initialPartner?.id ?? id,
+        ...partnerForm,
+        organizationName: partnerForm.organizationName.trim(),
+      });
     }
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-stretch">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <aside className="relative flex max-h-[100dvh] w-full flex-col rounded-t-3xl bg-background shadow-xl sm:ml-auto sm:h-full sm:max-w-md sm:rounded-none">
-        <header className="flex items-center justify-between border-b border-black/5 px-4 py-4 sm:px-6">
-          <h2 className="text-lg font-normal">{tab.addLabel}</h2>
-          <button
-            aria-label="Close"
-            onClick={onClose}
-            className="rounded-md p-2 text-foreground/60 hover:bg-black/5"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </header>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        aria-describedby={undefined}
+        className="moss-dialog flex max-w-md flex-col gap-0 overflow-hidden p-0 shadow-none"
+        onPointerDownOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("[data-radix-popper-content-wrapper], [data-slot=calendar]")) {
+            event.preventDefault();
+          }
+        }}
+        onFocusOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("[data-radix-popper-content-wrapper], [data-slot=calendar]")) {
+            event.preventDefault();
+          }
+        }}
+      >
+        <DialogHeader className="shrink-0 px-5 pb-3 pr-12 pt-5 text-left">
+          <DialogTitle className="text-lg font-normal">
+            {initial ? tab.addLabel.replace(/^Add /, "Edit ") : tab.addLabel}
+          </DialogTitle>
+        </DialogHeader>
 
-        <form id="community-add-form" className="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6" onSubmit={handleSubmit}>
+        <form id="community-add-form" className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-2" onSubmit={handleSubmit}>
           {tab.key === "children" && (
             <>
               <ChildrenFields values={childForm} onChange={setChildForm} />
-              <GuardianPicker
-                guardians={guardians}
-                mode={guardianMode}
-                onModeChange={setGuardianMode}
-                selectedGuardianId={selectedGuardianId}
-                onSelectGuardian={setSelectedGuardianId}
-                newGuardian={newGuardianForm}
-                onNewGuardianChange={setNewGuardianForm}
-              />
+              {initialChild ? (
+                <ConnectedGuardianEditor
+                  guardians={guardians}
+                  childrenRecords={childrenRecords}
+                  excludeChildId={initialChild.id}
+                  value={connectedGuardian}
+                  onChange={setConnectedGuardian}
+                />
+              ) : (
+                <GuardianPicker
+                  guardians={guardians}
+                  mode={guardianMode}
+                  onModeChange={setGuardianMode}
+                  selectedGuardianId={selectedGuardianId}
+                  onSelectGuardian={setSelectedGuardianId}
+                  newGuardian={newGuardianForm}
+                  onNewGuardianChange={setNewGuardianForm}
+                />
+              )}
             </>
           )}
           {tab.key === "guardians" && (
-            <GuardianFields values={guardianForm} onChange={setGuardianForm} />
+            <>
+              <GuardianFields values={guardianForm} onChange={setGuardianForm} />
+              {initialGuardian ? (
+                <LinkedChildrenSummary
+                  childrenRecords={childrenRecords.filter((child) => child.guardianId === initialGuardian.id)}
+                />
+              ) : null}
+            </>
           )}
           {tab.key === "volunteers" && (
             <VolunteerFields values={volunteerForm} onChange={setVolunteerForm} />
@@ -603,7 +928,7 @@ function AddRecordDrawer({
           )}
         </form>
 
-        <footer className="sticky bottom-0 flex justify-end gap-2 border-t border-black/5 bg-background px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+        <footer className="flex shrink-0 justify-end gap-2 px-5 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -620,7 +945,102 @@ function AddRecordDrawer({
             Save
           </button>
         </footer>
-      </aside>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConnectedGuardianEditor({
+  guardians,
+  childrenRecords,
+  excludeChildId,
+  value,
+  onChange,
+}: {
+  guardians: GuardianRecord[];
+  childrenRecords: ChildRecord[];
+  excludeChildId?: string;
+  value: GuardianRecord;
+  onChange: (next: GuardianRecord) => void;
+}) {
+  const linked = childrenRecords.filter(
+    (child) => value.id && child.guardianId === value.id && child.id !== excludeChildId,
+  );
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-black/5 bg-[#FCFCFC] px-4 py-4">
+      <span className="block text-xs font-light text-foreground/60">Connected guardian</span>
+      <AppSelect
+        value={value.id}
+        onChange={(e) => {
+          const nextId = e.target.value;
+          if (nextId === "new") {
+            onChange({ id: "new", ...emptyGuardianFields() });
+            return;
+          }
+          if (!nextId) {
+            onChange({ id: "", ...emptyGuardianFields() });
+            return;
+          }
+          const found = guardians.find((guardian) => guardian.id === nextId);
+          if (found) onChange(found);
+        }}
+      >
+        <option value="">No guardian</option>
+        {guardians.map((guardian) => (
+          <option key={guardian.id} value={guardian.id}>
+            {guardian.guardianName}
+            {guardian.email ? ` · ${guardian.email}` : ""}
+          </option>
+        ))}
+        <option value="new">Create a new guardian</option>
+      </AppSelect>
+      {value.id ? (
+        <div className="space-y-3">
+          <Field label="Guardian name">
+            <input className={inputCls} value={value.guardianName} onChange={(e) => onChange({ ...value, guardianName: e.target.value })} />
+          </Field>
+          <Field label="Email">
+            <input type="email" className={inputCls} value={value.email} onChange={(e) => onChange({ ...value, email: e.target.value })} />
+          </Field>
+          <Field label="Phone">
+            <input type="tel" className={inputCls} value={value.phone} onChange={(e) => onChange({ ...value, phone: e.target.value })} />
+          </Field>
+          <Field label="Emergency contact name">
+            <input className={inputCls} value={value.emergencyContactName} onChange={(e) => onChange({ ...value, emergencyContactName: e.target.value })} />
+          </Field>
+          <Field label="Emergency contact phone">
+            <input type="tel" className={inputCls} value={value.emergencyContactPhone} onChange={(e) => onChange({ ...value, emergencyContactPhone: e.target.value })} />
+          </Field>
+          {linked.length > 0 ? (
+            <p className="text-xs font-light text-foreground/50">
+              Also linked to {linked.map((child) => child.fullName).join(", ")}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-sm font-light text-foreground/50">This child is not linked to a guardian yet.</p>
+      )}
+    </div>
+  );
+}
+
+function LinkedChildrenSummary({ childrenRecords }: { childrenRecords: ChildRecord[] }) {
+  if (childrenRecords.length === 0) {
+    return <p className="text-sm font-light text-foreground/50">No children linked yet.</p>;
+  }
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-black/5 bg-[#FCFCFC] px-4 py-4">
+      <span className="block text-xs font-light text-foreground/60">Linked children</span>
+      {childrenRecords.map((child) => (
+        <div key={child.id} className="rounded-xl bg-white px-3 py-2.5">
+          <p className="text-sm font-normal">{child.fullName}</p>
+          <p className="mt-0.5 text-xs font-light text-foreground/55">
+            {[child.program, child.status, formatDob(child.dateOfBirth)].filter(Boolean).join(" · ")}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -636,6 +1056,60 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inputCls =
   "w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-base font-light placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none md:py-2 md:text-sm";
+
+function AppSelect({ className, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div className="relative">
+      <select className={cn(inputCls, "appearance-none pr-10", className)} {...props}>
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45" />
+    </div>
+  );
+}
+
+function localDateToIso(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function isoToLocalDate(value: string) {
+  const iso = toDateInputValue(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return undefined;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function DateField({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selected = isoToLocalDate(value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className={cn(inputCls, "flex items-center justify-between text-left")}>
+          <span className={value ? "text-foreground" : "text-foreground/40"}>{value ? formatDob(value) : "MM/DD/YY"}</span>
+          <CalendarDays className="h-4 w-4 shrink-0 text-foreground/45" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="moss-dialog z-[80] w-auto rounded-2xl border-black/10 p-2 shadow-none">
+        <Calendar
+          mode="single"
+          selected={selected}
+          defaultMonth={selected}
+          className="bg-transparent p-1"
+          classNames={{ caption_label: "select-none text-sm font-normal" }}
+          onSelect={(date) => {
+            if (!date) return;
+            onChange(localDateToIso(date));
+            setOpen(false);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function ChildrenFields({
   values,
@@ -654,41 +1128,26 @@ function ChildrenFields({
         />
       </Field>
       <Field label="Date of birth">
-        <input
-          type="date"
-          className={inputCls}
-          value={values.dateOfBirth}
-          onChange={(e) => onChange({ ...values, dateOfBirth: e.target.value })}
-        />
+        <DateField value={values.dateOfBirth} onChange={(dateOfBirth) => onChange({ ...values, dateOfBirth })} />
       </Field>
       <Field label="Program">
-        <select
-          className={inputCls}
-          value={values.program}
-          onChange={(e) => onChange({ ...values, program: e.target.value })}
-        >
+        <AppSelect value={values.program} onChange={(e) => onChange({ ...values, program: e.target.value })}>
           <option>Full-Time</option>
           <option>Drop-In</option>
           <option>Event</option>
-        </select>
+        </AppSelect>
       </Field>
       <Field label="Status">
-        <select
-          className={inputCls}
-          value={values.status}
-          onChange={(e) => onChange({ ...values, status: e.target.value })}
-        >
+        <AppSelect value={values.status} onChange={(e) => onChange({ ...values, status: e.target.value })}>
           <option>Active</option>
           <option>Inactive</option>
           <option>Archived</option>
-        </select>
+        </AppSelect>
       </Field>
       <Field label="Enrollment date">
-        <input
-          type="date"
-          className={inputCls}
+        <DateField
           value={values.enrollmentDate}
-          onChange={(e) => onChange({ ...values, enrollmentDate: e.target.value })}
+          onChange={(enrollmentDate) => onChange({ ...values, enrollmentDate })}
         />
       </Field>
       <Field label="Notes">
@@ -756,11 +1215,7 @@ function GuardianPicker({
             No guardians yet — switch to Create new.
           </p>
         ) : (
-          <select
-            className={inputCls}
-            value={selectedGuardianId}
-            onChange={(e) => onSelectGuardian(e.target.value)}
-          >
+          <AppSelect value={selectedGuardianId} onChange={(e) => onSelectGuardian(e.target.value)}>
             <option value="">Choose a guardian…</option>
             {guardians.map((guardian) => (
               <option key={guardian.id} value={guardian.id}>
@@ -768,7 +1223,7 @@ function GuardianPicker({
                 {guardian.email ? ` · ${guardian.email}` : ""}
               </option>
             ))}
-          </select>
+          </AppSelect>
         )
       ) : (
         <div className="space-y-3">
@@ -810,6 +1265,12 @@ function GuardianFields({
 }) {
   return (
     <>
+      <Field label="Status">
+        <AppSelect value={values.status || "Active"} onChange={(e) => onChange({ ...values, status: e.target.value })}>
+          <option>Active</option>
+          <option>Inactive</option>
+        </AppSelect>
+      </Field>
       <Field label="Guardian name">
         <input
           className={inputCls}
@@ -846,14 +1307,6 @@ function GuardianFields({
           className={inputCls}
           value={values.emergencyContactPhone}
           onChange={(e) => onChange({ ...values, emergencyContactPhone: e.target.value })}
-        />
-      </Field>
-      <Field label="Linked children">
-        <input
-          className={inputCls}
-          value={values.linkedChildren}
-          onChange={(e) => onChange({ ...values, linkedChildren: e.target.value })}
-          placeholder="Comma-separated child names"
         />
       </Field>
     </>
@@ -936,25 +1389,17 @@ function VolunteerFields({
         </div>
       </div>
       <Field label="Status">
-        <select
-          className={inputCls}
-          value={values.status}
-          onChange={(e) => onChange({ ...values, status: e.target.value })}
-        >
+        <AppSelect value={values.status} onChange={(e) => onChange({ ...values, status: e.target.value })}>
           <option>Active</option>
           <option>Inactive</option>
-        </select>
+        </AppSelect>
       </Field>
       <Field label="Source">
-        <select
-          className={inputCls}
-          value={values.source}
-          onChange={(e) => onChange({ ...values, source: e.target.value })}
-        >
+        <AppSelect value={values.source} onChange={(e) => onChange({ ...values, source: e.target.value })}>
           <option>Website form</option>
           <option>Referral</option>
           <option>FCW event</option>
-        </select>
+        </AppSelect>
       </Field>
     </>
   );
@@ -1000,8 +1445,7 @@ function PartnerFields({
         />
       </Field>
       <Field label="Partnership type">
-        <select
-          className={inputCls}
+        <AppSelect
           value={values.partnershipType}
           onChange={(e) => onChange({ ...values, partnershipType: e.target.value })}
         >
@@ -1009,7 +1453,7 @@ function PartnerFields({
           <option>Community</option>
           <option>Media</option>
           <option>Other</option>
-        </select>
+        </AppSelect>
       </Field>
       <Field label="Notes">
         <textarea
@@ -1020,15 +1464,11 @@ function PartnerFields({
         />
       </Field>
       <Field label="Status">
-        <select
-          className={inputCls}
-          value={values.status}
-          onChange={(e) => onChange({ ...values, status: e.target.value })}
-        >
+        <AppSelect value={values.status} onChange={(e) => onChange({ ...values, status: e.target.value })}>
           <option>Active</option>
           <option>Prospect</option>
           <option>Inactive</option>
-        </select>
+        </AppSelect>
       </Field>
     </>
   );

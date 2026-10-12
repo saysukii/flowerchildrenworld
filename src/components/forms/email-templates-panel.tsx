@@ -82,7 +82,7 @@ export function EmailTemplatesPanel() {
   const activeMeta = templates.find((template) => template.id === activeId);
 
   return (
-    <section className="mt-10 rounded-3xl border border-black/5 bg-white p-6 sm:p-8">
+    <section className="moss-card mt-10 rounded-3xl p-6 sm:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <span className="font-label text-[11px] text-foreground/50">Email templates</span>

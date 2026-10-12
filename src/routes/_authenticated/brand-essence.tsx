@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { AppShell } from "@/components/app-shell";
 import { Reveal } from "@/components/motion";
 import { PageLabel } from "@/components/page-label";
 import { FilesCard, vaultUploadCategory } from "@/components/brand-essence/files-card";
@@ -61,7 +60,7 @@ function BrandEssencePage() {
   const showMission = tab === "all";
 
   useEffect(() => {
-    setAssets(loadBrandAssets());
+    void loadBrandAssets().then(setAssets);
     void supabase.auth.getUser().then(({ data }) => setAdmin(isAdmin(data.user)));
   }, []);
 
@@ -76,12 +75,12 @@ function BrandEssencePage() {
   }
 
   function handleDelete(id: string) {
-    removeBrandAsset(id);
+    void removeBrandAsset(id);
     setAssets((prev) => prev.filter((asset) => asset.id !== id));
   }
 
   return (
-    <AppShell>
+    <>
       <div className="mx-auto max-w-6xl">
         <Reveal>
           <header className="mb-6 sm:mb-8">
@@ -155,6 +154,6 @@ function BrandEssencePage() {
           onUploaded={(asset) => setAssets((prev) => [asset, ...prev])}
         />
       ) : null}
-    </AppShell>
+    </>
   );
 }

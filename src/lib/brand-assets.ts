@@ -57,13 +57,28 @@ export const DEFAULT_BRAND_LOGOS: DefaultBrandLogo[] = [
   },
 ];
 
-const STORAGE_KEY = "fcw-brand-assets";
-const MAX_BYTES = 1_500_000;
+const LEGACY_STORAGE_KEY = "fcw-brand-assets";
+const DB_NAME = "fcw-brand-assets";
+const STORE_NAME = "assets";
+const MAX_BYTES = 10 * 1024 * 1024;
 
-function loadStoredBrandAssets(): BrandAsset[] {
-  if (typeof window === "undefined") return [];
+function openAssetDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("Could not open asset storage."));
+  });
+}
+
+function readLegacyAssets(): BrandAsset[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as BrandAsset[];
     return Array.isArray(parsed) ? parsed : [];
@@ -72,22 +87,56 @@ function loadStoredBrandAssets(): BrandAsset[] {
   }
 }
 
-export function loadBrandAssets(): BrandAsset[] {
-  return loadStoredBrandAssets();
+async function readAllAssets(db: IDBDatabase): Promise<BrandAsset[]> {
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
+    request.onsuccess = () => {
+      const assets = Array.isArray(request.result) ? (request.result as BrandAsset[]) : [];
+      assets.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
+      resolve(assets);
+    };
+    request.onerror = () => reject(request.error ?? new Error("Could not read saved assets."));
+  });
 }
 
-export function saveBrandAssets(assets: BrandAsset[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(assets));
+async function writeAllAssets(db: IDBDatabase, assets: BrandAsset[]) {
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.clear();
+    for (const asset of assets) store.put(asset);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error("Could not save that file."));
+  });
 }
 
-export function appendBrandAsset(asset: BrandAsset) {
-  const assets = loadStoredBrandAssets();
-  saveBrandAssets([asset, ...assets]);
+export async function loadBrandAssets(): Promise<BrandAsset[]> {
+  if (typeof window === "undefined") return [];
+  const db = await openAssetDb();
+  const stored = await readAllAssets(db);
+  if (stored.length > 0) return stored;
+
+  const legacy = readLegacyAssets();
+  if (legacy.length === 0) return [];
+  await writeAllAssets(db, legacy);
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+  return legacy;
 }
 
-export function removeBrandAsset(id: string) {
-  const assets = loadStoredBrandAssets().filter((asset) => asset.id !== id);
-  saveBrandAssets(assets);
+export async function appendBrandAsset(asset: BrandAsset) {
+  const db = await openAssetDb();
+  const assets = await readAllAssets(db);
+  await writeAllAssets(db, [asset, ...assets]);
+}
+
+export async function removeBrandAsset(id: string) {
+  const db = await openAssetDb();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error("Could not remove that file."));
+  });
 }
 
 export function isBuiltInAsset(asset: BrandAsset) {
@@ -123,7 +172,7 @@ export function filterBrandAssets(assets: BrandAsset[], category: BrandAssetCate
 
 export async function fileToDataUrl(file: File): Promise<string> {
   if (file.size > MAX_BYTES) {
-    throw new Error("Files must be under 1.5 MB for now.");
+    throw new Error("Files must be 10 MB or smaller.");
   }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -135,7 +184,7 @@ export async function fileToDataUrl(file: File): Promise<string> {
 
 export async function blobToDataUrl(blob: Blob, maxBytes = MAX_BYTES): Promise<string> {
   if (blob.size > maxBytes) {
-    throw new Error("That file is too large to import (max 1.5 MB).");
+    throw new Error("That file is too large to import (max 10 MB).");
   }
   return fileToDataUrl(new File([blob], "asset", { type: blob.type || "application/octet-stream" }));
 }

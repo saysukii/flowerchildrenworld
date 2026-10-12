@@ -117,7 +117,7 @@ export function ColorPaletteCard({ admin }: { admin: boolean }) {
   }, [colors, columns, draft]);
 
   return (
-    <section className="rounded-3xl border border-black/5 bg-white px-6 py-7 sm:px-7 sm:py-8">
+    <section className="moss-card rounded-3xl px-6 py-7 sm:px-7 sm:py-8">
       <h2 className="mb-5 text-lg font-normal">Color Palette</h2>
 
       <div className="space-y-2 sm:space-y-3">

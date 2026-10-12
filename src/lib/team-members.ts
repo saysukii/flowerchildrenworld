@@ -1,4 +1,5 @@
 import {
+  CONTROLLABLE_PAGES,
   DEFAULT_MEMBER_PAGES,
   loadLegacyMemberPageAccess,
   normalizePages,
@@ -12,7 +13,7 @@ export type TeamMember = {
   email: string;
   phone: string;
   role: "Admin" | "Member";
-  status: "Active" | "Pending";
+  status: "Active" | "Pending" | "Inactive";
   pages: PageKey[];
 };
 
@@ -26,7 +27,7 @@ function normalizeMember(raw: Partial<TeamMember> & { id?: string }, fallbackPag
     email: raw.email,
     phone: typeof raw.phone === "string" ? raw.phone : "",
     role: raw.role === "Admin" ? "Admin" : "Member",
-    status: raw.status === "Pending" ? "Pending" : "Active",
+    status: raw.status === "Pending" || raw.status === "Inactive" ? raw.status : "Active",
     pages: raw.pages !== undefined ? normalizePages(raw.pages) : [...fallbackPages],
   };
 }
@@ -56,8 +57,25 @@ export function saveTeamMembers(members: TeamMember[]) {
 export function getMemberPagesForEmail(email: string | null | undefined): PageKey[] {
   if (!email) return [...DEFAULT_MEMBER_PAGES];
   const member = loadTeamMembers().find((m) => m.email.toLowerCase() === email.toLowerCase());
+  if (member?.status === "Inactive") return [];
+  if (member?.role === "Admin") return CONTROLLABLE_PAGES.map((page) => page.key);
   if (member) return [...member.pages];
   return loadLegacyMemberPageAccess();
+}
+
+/** Mark an invited member Active after they accept and finish onboarding. */
+export function activateTeamMemberByEmail(email: string) {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return loadTeamMembers();
+  const members = loadTeamMembers();
+  let changed = false;
+  const next = members.map((member) => {
+    if (member.email.toLowerCase() !== normalized || member.status !== "Pending") return member;
+    changed = true;
+    return { ...member, status: "Active" as const };
+  });
+  if (changed) saveTeamMembers(next);
+  return next;
 }
 
 export function seedTeamForUser(email: string, displayName: string, admin: boolean): TeamMember[] {

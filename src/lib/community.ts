@@ -12,6 +12,8 @@ export type ChildRecord = {
   guardianId: string;
   guardianLink: string;
   notes: string;
+  /** Calendar day the record was added, YYYY-MM-DD. */
+  addedAt?: string;
 };
 
 export type GuardianRecord = {
@@ -22,6 +24,8 @@ export type GuardianRecord = {
   emergencyContactName: string;
   emergencyContactPhone: string;
   linkedChildren: string;
+  status: string;
+  addedAt?: string;
 };
 
 export type VolunteerRecord = {
@@ -33,6 +37,7 @@ export type VolunteerRecord = {
   availability: string;
   status: string;
   source: string;
+  addedAt?: string;
 };
 
 export type PartnerRecord = {
@@ -44,6 +49,7 @@ export type PartnerRecord = {
   partnershipType: string;
   notes: string;
   status: string;
+  addedAt?: string;
 };
 
 export type CommunityStore = {
@@ -61,6 +67,7 @@ export type CsvFieldDef = {
 };
 
 const STORAGE_KEY = "fcw-community";
+export const COMMUNITY_UPDATED_EVENT = "fcw-community-updated";
 
 const EMPTY_STORE: CommunityStore = {
   children: [],
@@ -98,6 +105,7 @@ export const COMMUNITY_CSV_FIELDS: Record<CommunityTab, CsvFieldDef[]> = {
       label: "Linked children",
       aliases: ["children", "linked child", "child names"],
     },
+    { key: "status", label: "Status", aliases: [] },
   ],
   volunteers: [
     { key: "fullName", label: "Full name", aliases: ["name", "volunteer name"], required: true },
@@ -139,7 +147,12 @@ export function loadCommunityStore(): CommunityStore {
             guardianId: child.guardianId ?? "",
           }))
         : [],
-      guardians: Array.isArray(parsed.guardians) ? parsed.guardians : [],
+      guardians: Array.isArray(parsed.guardians)
+        ? parsed.guardians.map((guardian) => ({
+            ...guardian,
+            status: guardian.status || "Active",
+          }))
+        : [],
       volunteers: Array.isArray(parsed.volunteers) ? parsed.volunteers : [],
       partners: Array.isArray(parsed.partners) ? parsed.partners : [],
     };
@@ -162,21 +175,60 @@ function isCommunityStoreEmpty(store: CommunityStore) {
 
 export function saveCommunityStore(store: CommunityStore) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(COMMUNITY_UPDATED_EVENT));
+  }
+}
+
+/** Display a stored date as MM/DD/YY. */
+export function formatDob(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (iso) return `${iso[2]}/${iso[3]}/${iso[1].slice(2)}`;
+
+  const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(trimmed);
+  if (slash) {
+    const year = slash[3].length === 2 ? slash[3] : slash[3].slice(-2);
+    return `${slash[1].padStart(2, "0")}/${slash[2].padStart(2, "0")}/${year}`;
+  }
+
+  return trimmed;
+}
+
+/** Value for an `<input type="date">`. */
+export function toDateInputValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+
+  const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(trimmed);
+  if (!slash) return "";
+  const yearNum = Number(slash[3].length === 2 ? (Number(slash[3]) <= 30 ? `20${slash[3]}` : `19${slash[3]}`) : slash[3]);
+  if (!Number.isFinite(yearNum)) return "";
+  return `${String(yearNum).padStart(4, "0")}-${slash[1].padStart(2, "0")}-${slash[2].padStart(2, "0")}`;
 }
 
 export function getRecordsForTab(store: CommunityStore, tab: CommunityTab) {
   return store[tab];
 }
 
-export function appendRecordsForTab<T extends { id: string }>(
+export function appendRecordsForTab(
   store: CommunityStore,
   tab: CommunityTab,
-  records: T[],
+  records: CommunityStore[CommunityTab],
 ): CommunityStore {
-  return {
-    ...store,
-    [tab]: [...(store[tab] as T[]), ...records],
-  };
+  if (tab === "children") {
+    return { ...store, children: [...store.children, ...(records as ChildRecord[])] };
+  }
+  if (tab === "guardians") {
+    return { ...store, guardians: [...store.guardians, ...(records as GuardianRecord[])] };
+  }
+  if (tab === "volunteers") {
+    return { ...store, volunteers: [...store.volunteers, ...(records as VolunteerRecord[])] };
+  }
+  return { ...store, partners: [...store.partners, ...(records as PartnerRecord[])] };
 }
 
 function normalizeHeader(header: string) {
@@ -294,6 +346,14 @@ function createId() {
   return crypto.randomUUID();
 }
 
+/** Calendar day a new directory record was added. */
+export function todayAddedAt(now = new Date()) {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function rowsToRecords(tab: CommunityTab, rows: Record<string, string>[]) {
   switch (tab) {
     case "children":
@@ -310,6 +370,7 @@ export function rowsToRecords(tab: CommunityTab, rows: Record<string, string>[])
             guardianId: row.guardianId?.trim() ?? "",
             guardianLink: row.guardianLink?.trim() ?? "",
             notes: row.notes?.trim() ?? "",
+            addedAt: row.enrollmentDate?.trim() || todayAddedAt(),
           }),
         );
     case "guardians":
@@ -324,6 +385,8 @@ export function rowsToRecords(tab: CommunityTab, rows: Record<string, string>[])
             emergencyContactName: row.emergencyContactName?.trim() ?? "",
             emergencyContactPhone: row.emergencyContactPhone?.trim() ?? "",
             linkedChildren: row.linkedChildren?.trim() ?? "",
+            status: row.status?.trim() || "Active",
+            addedAt: todayAddedAt(),
           }),
         );
     case "volunteers":
@@ -339,6 +402,7 @@ export function rowsToRecords(tab: CommunityTab, rows: Record<string, string>[])
             availability: row.availability?.trim() ?? "",
             status: row.status?.trim() || "Active",
             source: row.source?.trim() || "Website form",
+            addedAt: todayAddedAt(),
           }),
         );
     case "partners":
@@ -354,9 +418,18 @@ export function rowsToRecords(tab: CommunityTab, rows: Record<string, string>[])
             partnershipType: row.partnershipType?.trim() || "Community",
             notes: row.notes?.trim() ?? "",
             status: row.status?.trim() || "Active",
+            addedAt: todayAddedAt(),
           }),
         );
   }
+}
+
+export function removeLinkedChild(existing: string, childName: string) {
+  return existing
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name && name.toLowerCase() !== childName.toLowerCase())
+    .join(", ");
 }
 
 export function appendLinkedChild(existing: string, childName: string) {
@@ -401,8 +474,110 @@ export function formatChildRow(child: ChildRecord) {
     name: child.fullName,
     program: child.program,
     status: child.status,
-    dob: child.dateOfBirth,
+    dob: formatDob(child.dateOfBirth),
   };
+}
+
+export function replaceRecord<T extends { id: string }>(records: T[], record: T) {
+  return records.map((item) => (item.id === record.id ? record : item));
+}
+
+export function saveEditedChild(
+  store: CommunityStore,
+  child: ChildRecord,
+  guardian:
+    | { mode: "existing"; guardian: GuardianRecord }
+    | { mode: "new"; guardian: GuardianRecord }
+    | null,
+): CommunityStore {
+  const previous = store.children.find((item) => item.id === child.id);
+  let guardians = store.guardians;
+
+  if (previous?.guardianId && previous.guardianId !== guardian?.guardian.id) {
+    guardians = guardians.map((item) =>
+      item.id === previous.guardianId
+        ? { ...item, linkedChildren: removeLinkedChild(item.linkedChildren, previous.fullName) }
+        : item,
+    );
+  }
+
+  let nextChild: ChildRecord = { ...child, guardianId: "", guardianLink: "" };
+
+  if (guardian) {
+    const current = guardian.guardian;
+    let linked = current.linkedChildren;
+    if (previous && previous.guardianId === current.id && previous.fullName !== child.fullName) {
+      linked = removeLinkedChild(linked, previous.fullName);
+    }
+    linked = appendLinkedChild(linked, child.fullName);
+    const updatedGuardian: GuardianRecord = { ...current, linkedChildren: linked };
+    guardians =
+      guardian.mode === "new"
+        ? [...guardians, updatedGuardian]
+        : guardians.map((item) => (item.id === updatedGuardian.id ? updatedGuardian : item));
+    nextChild = {
+      ...child,
+      guardianId: updatedGuardian.id,
+      guardianLink: updatedGuardian.guardianName,
+    };
+  } else if (previous?.guardianId) {
+    guardians = guardians.map((item) =>
+      item.id === previous.guardianId
+        ? { ...item, linkedChildren: removeLinkedChild(item.linkedChildren, previous.fullName) }
+        : item,
+    );
+  }
+
+  return {
+    ...store,
+    children: store.children.some((item) => item.id === child.id)
+      ? store.children.map((item) => (item.id === child.id ? nextChild : item))
+      : [...store.children, nextChild],
+    guardians,
+  };
+}
+
+export function updateGuardianRecord(store: CommunityStore, guardian: GuardianRecord): CommunityStore {
+  return {
+    ...store,
+    guardians: replaceRecord(store.guardians, guardian),
+    children: store.children.map((child) =>
+      child.guardianId === guardian.id ? { ...child, guardianLink: guardian.guardianName } : child,
+    ),
+  };
+}
+
+export function deleteCommunityRecord(store: CommunityStore, tab: CommunityTab, id: string): CommunityStore {
+  if (tab === "children") {
+    const child = store.children.find((item) => item.id === id);
+    return {
+      ...store,
+      children: store.children.filter((item) => item.id !== id),
+      guardians: child
+        ? store.guardians.map((guardian) =>
+            guardian.id === child.guardianId
+              ? { ...guardian, linkedChildren: removeLinkedChild(guardian.linkedChildren, child.fullName) }
+              : guardian,
+          )
+        : store.guardians,
+    };
+  }
+
+  if (tab === "guardians") {
+    return {
+      ...store,
+      guardians: store.guardians.filter((item) => item.id !== id),
+      children: store.children.map((child) =>
+        child.guardianId === id ? { ...child, guardianId: "", guardianLink: "" } : child,
+      ),
+    };
+  }
+
+  if (tab === "volunteers") {
+    return { ...store, volunteers: store.volunteers.filter((item) => item.id !== id) };
+  }
+
+  return { ...store, partners: store.partners.filter((item) => item.id !== id) };
 }
 
 export function formatGuardianRow(guardian: GuardianRecord) {
@@ -411,6 +586,7 @@ export function formatGuardianRow(guardian: GuardianRecord) {
     email: guardian.email,
     phone: guardian.phone,
     linkedChildren: guardian.linkedChildren,
+    status: guardian.status || "Active",
   };
 }
 

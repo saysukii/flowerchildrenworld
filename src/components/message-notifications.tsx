@@ -8,7 +8,12 @@ import {
   type ReactNode,
 } from "react";
 import { Bell } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { isDevMock, MOCK_TEAM_MEMBERS } from "@/lib/dev-mock-data";
 import {
   formatMessageTime,
@@ -124,27 +129,12 @@ export function useMessageInbox() {
   return ctx;
 }
 
-function UnreadDot({ count, className }: { count: number; className?: string }) {
+function UnreadGlow({ count, className }: { count: number; className?: string }) {
   if (count <= 0) return null;
-  return (
-    <span
-      className={cn(
-        "flex h-4 min-w-4 items-center justify-center rounded-full bg-[#3AB819] px-1 text-[10px] font-medium leading-none text-white",
-        className,
-      )}
-    >
-      {count > 9 ? "9+" : count}
-    </span>
-  );
+  return <span className={cn("moss-unread", className)} aria-hidden="true" />;
 }
 
-export function MessageNotificationsBell({
-  className,
-  align = "end",
-}: {
-  className?: string;
-  align?: "start" | "center" | "end";
-}) {
+export function MessageNotificationsBell({ className }: { className?: string }) {
   const navigate = useNavigate();
   const { memberId, store, setStore, unread, items } = useMessageInbox();
   const [open, setOpen] = useState(false);
@@ -167,8 +157,8 @@ export function MessageNotificationsBell({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
         <button
           type="button"
           aria-label={unread > 0 ? `${unread} unread message notifications` : "Message notifications"}
@@ -178,15 +168,15 @@ export function MessageNotificationsBell({
           )}
         >
           <Bell className="h-5 w-5" />
-          <UnreadDot count={unread} className="absolute right-1 top-1" />
+          <UnreadGlow count={unread} className="absolute right-2 top-2" />
         </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align={align}
-        className="w-[min(100vw-2rem,22rem)] gap-0 overflow-hidden rounded-2xl border-black/10 p-0 shadow-lg"
+      </DialogTrigger>
+      <DialogContent
+        aria-describedby={undefined}
+        className="moss-dialog w-[min(100vw-2rem,22rem)] max-w-[22rem] gap-0 overflow-hidden p-0 shadow-none"
       >
-        <div className="flex items-center justify-between border-b border-black/5 px-4 py-3">
-          <p className="text-sm font-normal">Notifications</p>
+        <div className="flex items-center justify-between border-b border-black/5 px-4 py-3 pr-12">
+          <DialogTitle className="text-sm font-normal">Notifications</DialogTitle>
           {unread > 0 ? (
             <button
               type="button"
@@ -254,7 +244,7 @@ export function MessageNotificationsBell({
             Open messages
           </button>
         </div>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 }

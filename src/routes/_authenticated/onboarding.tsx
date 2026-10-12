@@ -2,11 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { MeadowGround } from "@/components/meadow-ground";
 import { PageEnter } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { activateTeamMemberByEmail } from "@/lib/team-members";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   head: () => ({
@@ -42,12 +44,14 @@ function OnboardingPage() {
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) return toast.error(error.message);
+    if (email) activateTeamMemberByEmail(email);
     toast.success("Your account is ready.");
     navigate({ to: "/dashboard" });
   }
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-background px-5 py-10">
+    <MeadowGround>
+    <main className="flex min-h-screen w-full items-center justify-center px-5 py-10">
       <PageEnter className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-2xl tracking-tight text-foreground">Welcome</h1>
@@ -56,7 +60,7 @@ function OnboardingPage() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-foreground/10 bg-card p-6 shadow-sm">
+        <div className="moss-card rounded-2xl p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -109,5 +113,6 @@ function OnboardingPage() {
         </p>
       </PageEnter>
     </main>
+    </MeadowGround>
   );
 }

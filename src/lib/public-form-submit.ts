@@ -1,3 +1,15 @@
+import {
+  appendRecordsForTab,
+  loadCommunityStore,
+  saveChildWithGuardian,
+  saveCommunityStore,
+  todayAddedAt,
+  type ChildRecord,
+  type GuardianRecord,
+  type PartnerRecord,
+  type VolunteerRecord,
+} from "@/lib/community";
+
 const API_BASE = typeof window !== "undefined" ? window.location.origin : "";
 
 export type VolunteerSubmission = {
@@ -38,6 +50,68 @@ export type EnrollmentSubmission = {
 
 export type FormSubmission = VolunteerSubmission | PartnerSubmission | EnrollmentSubmission;
 
+function recordFormSubmission(payload: FormSubmission) {
+  const store = loadCommunityStore();
+  const today = todayAddedAt();
+
+  if (payload.type === "volunteer") {
+    const volunteer: VolunteerRecord = {
+      id: crypto.randomUUID(),
+      fullName: `${payload.first_name} ${payload.last_name}`.trim(),
+      email: payload.email,
+      phone: payload.phone ?? "",
+      skills: [payload.skills, payload.notes].filter(Boolean).join(" — "),
+      availability: payload.availability ?? "",
+      status: "Active",
+      source: payload.hear_about || "Website form",
+      addedAt: today,
+    };
+    saveCommunityStore(appendRecordsForTab(store, "volunteers", [volunteer]));
+    return;
+  }
+
+  if (payload.type === "partner") {
+    const partner: PartnerRecord = {
+      id: crypto.randomUUID(),
+      organizationName: payload.organization_name,
+      contactName: payload.contact_name,
+      email: payload.email,
+      phone: payload.phone ?? "",
+      partnershipType: payload.partnership_type || "Community",
+      notes: [payload.show_up, payload.message].filter(Boolean).join("\n"),
+      status: "Active",
+      addedAt: today,
+    };
+    saveCommunityStore(appendRecordsForTab(store, "partners", [partner]));
+    return;
+  }
+
+  const guardian: GuardianRecord = {
+    id: crypto.randomUUID(),
+    guardianName: payload.guardian_name,
+    email: payload.guardian_email,
+    phone: payload.guardian_phone ?? "",
+    emergencyContactName: payload.emergency_contact_name,
+    emergencyContactPhone: payload.emergency_contact_phone,
+    linkedChildren: "",
+    status: "Active",
+    addedAt: today,
+  };
+  const child: ChildRecord = {
+    id: crypto.randomUUID(),
+    fullName: payload.child_name,
+    dateOfBirth: payload.date_of_birth,
+    program: payload.program || "Full-Time",
+    status: "Active",
+    enrollmentDate: today,
+    addedAt: today,
+    guardianId: "",
+    guardianLink: "",
+    notes: payload.notes ?? "",
+  };
+  saveCommunityStore(saveChildWithGuardian(store, child, guardian, true));
+}
+
 export async function submitPublicForm(payload: FormSubmission) {
   const response = await fetch(`${API_BASE}/api/forms/submit`, {
     method: "POST",
@@ -51,5 +125,6 @@ export async function submitPublicForm(payload: FormSubmission) {
     throw new Error(data.error ?? "Something went wrong. Please try again.");
   }
 
+  recordFormSubmission(payload);
   return data;
 }

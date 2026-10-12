@@ -14,6 +14,7 @@ import { Route as JoinRouteImport } from './routes/join'
 import { Route as EnrollRouteImport } from './routes/enroll'
 import { Route as DonateRouteImport } from './routes/donate'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuraRouteImport } from './routes/aura'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DonateThankYouRouteImport } from './routes/donate.thank-you'
@@ -55,6 +56,11 @@ const DonateRoute = DonateRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuraRoute = AuraRouteImport.update({
+  id: '/aura',
+  path: '/aura',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -146,6 +152,7 @@ const ApiDonationsCheckoutRoute = ApiDonationsCheckoutRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/aura': typeof AuraRoute
   '/auth': typeof AuthRoute
   '/donate': typeof DonateRouteWithChildren
   '/enroll': typeof EnrollRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/aura': typeof AuraRoute
   '/auth': typeof AuthRoute
   '/donate': typeof DonateRouteWithChildren
   '/enroll': typeof EnrollRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/aura': typeof AuraRoute
   '/auth': typeof AuthRoute
   '/donate': typeof DonateRouteWithChildren
   '/enroll': typeof EnrollRoute
@@ -219,6 +228,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/aura'
     | '/auth'
     | '/donate'
     | '/enroll'
@@ -242,6 +252,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/aura'
     | '/auth'
     | '/donate'
     | '/enroll'
@@ -266,6 +277,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/aura'
     | '/auth'
     | '/donate'
     | '/enroll'
@@ -291,6 +303,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuraRoute: typeof AuraRoute
   AuthRoute: typeof AuthRoute
   DonateRoute: typeof DonateRouteWithChildren
   EnrollRoute: typeof EnrollRoute
@@ -337,6 +350,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/aura': {
+      id: '/aura'
+      path: '/aura'
+      fullPath: '/aura'
+      preLoaderRoute: typeof AuraRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -504,6 +524,7 @@ const DonateRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuraRoute: AuraRoute,
   AuthRoute: AuthRoute,
   DonateRoute: DonateRouteWithChildren,
   EnrollRoute: EnrollRoute,

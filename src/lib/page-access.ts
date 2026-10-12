@@ -34,6 +34,7 @@ export const DEFAULT_MEMBER_PAGES: PageKey[] = [
   "dashboard",
   "messages",
   "community",
+  "brand-essence",
   "garden",
 ];
 
@@ -90,5 +91,5 @@ export function pageKeyFromPath(pathname: string): PageKey | null {
 export function firstAllowedPath(admin: boolean, memberPages: PageKey[]) {
   if (admin) return "/dashboard";
   const first = CONTROLLABLE_PAGES.find((p) => memberPages.includes(p.key));
-  return first?.path ?? "/dashboard";
+  return first?.path ?? "/settings";
 }

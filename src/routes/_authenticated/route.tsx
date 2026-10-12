@@ -1,4 +1,5 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import { AppShell } from "@/components/app-shell";
 import { getClientSessionUser } from "@/integrations/supabase/auth";
 import {
   canAccessPage,
@@ -30,5 +31,15 @@ export const Route = createFileRoute("/_authenticated")({
 
     return { user };
   },
-  component: () => <Outlet />,
+  component: AuthenticatedLayout,
 });
+
+function AuthenticatedLayout() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  if (pathname === "/onboarding") return <Outlet />;
+  return (
+    <AppShell>
+      <Outlet />
+    </AppShell>
+  );
+}

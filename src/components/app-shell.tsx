@@ -19,7 +19,7 @@ import {
   MessageNotificationsBell,
   useMessageInbox,
 } from "@/components/message-notifications";
-import { PageEnter } from "@/components/motion";
+import { MeadowGround } from "@/components/meadow-ground";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -60,7 +60,6 @@ function FcwFlowerLogo({ size, alt = "FCW" }: { size: number; alt?: string }) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
 
   async function signOut() {
@@ -70,8 +69,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <MessageInboxProvider>
-      <div className="min-h-screen w-full bg-background text-foreground">
-        <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-black/5 bg-background/90 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur md:hidden sm:px-6">
+      <MeadowGround className="w-full text-foreground">
+        <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-black/5 bg-[#FCFCFC]/55 px-4 pt-[env(safe-area-inset-top,0px)] backdrop-blur-md md:hidden sm:px-6">
           <FcwFlowerLogo size={26} />
           <div className="flex items-center gap-0.5">
             <MessageNotificationsBell />
@@ -86,7 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <div className="flex">
-          <aside className="sticky top-0 hidden h-[100dvh] w-64 shrink-0 flex-col border-r border-black/5 bg-background px-4 py-6 md:flex">
+          <aside className="sticky top-0 hidden h-[100dvh] w-64 shrink-0 flex-col border-r border-black/5 bg-[#FCFCFC]/55 px-4 py-6 backdrop-blur-md md:flex">
             <SidebarInner variant="desktop" onNavigate={() => {}} onSignOut={signOut} />
           </aside>
 
@@ -101,10 +100,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Sheet>
 
           <main className="min-w-0 flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 lg:px-10 lg:py-10">
-            <PageEnter key={pathname}>{children}</PageEnter>
+            {children}
           </main>
         </div>
-      </div>
+      </MeadowGround>
     </MessageInboxProvider>
   );
 }
@@ -217,9 +216,9 @@ function SidebarInner({
           const Icon = item.icon;
           const showUnread = item.to === "/messages" && messageUnread > 0;
           return (
-            <a
+            <Link
               key={item.to}
-              href={item.to}
+              to={item.to}
               onClick={onNavigate}
               className={[
                 "flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-light transition-colors",
@@ -231,16 +230,9 @@ function SidebarInner({
               <Icon className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1">{item.label}</span>
               {showUnread ? (
-                <span
-                  className={cn(
-                    "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium leading-none",
-                    active ? "bg-background text-foreground" : "bg-[#3AB819] text-white",
-                  )}
-                >
-                  {messageUnread > 9 ? "9+" : messageUnread}
-                </span>
+                <span className="moss-unread" aria-label={`${messageUnread} unread`} />
               ) : null}
-            </a>
+            </Link>
           );
         })}
       </nav>
@@ -259,7 +251,7 @@ function SidebarInner({
             <p className="truncate text-sm font-normal leading-tight">{displayName}</p>
             <p className="text-xs text-foreground/50">{roleLabel}</p>
           </div>
-          <MessageNotificationsBell className="hidden p-2 md:inline-flex" align="end" />
+          <MessageNotificationsBell className="hidden p-2 md:inline-flex" />
           <button
             aria-label="Sign out"
             onClick={onSignOut}

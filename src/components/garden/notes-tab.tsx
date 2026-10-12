@@ -12,6 +12,7 @@ import {
   stripHtml,
 } from "@/lib/garden";
 import { supabase } from "@/integrations/supabase/client";
+import { WASH_BUTTON_CLASS } from "@/lib/wash-button";
 import { cn } from "@/lib/utils";
 
 type NotesTabProps = {
@@ -117,7 +118,7 @@ export function NotesTab({ userId, query, refreshKey = 0, savedNote, onOpenNote 
           <Loader2 className="h-6 w-6 animate-spin text-foreground/40" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-3xl bg-black/[0.03] px-6 py-20 text-center">
+        <div className="moss-card rounded-3xl px-6 py-20 text-center">
           <p className="text-sm font-light text-foreground/50">Nothing planted yet. Start with a thought.</p>
         </div>
       ) : (
@@ -137,7 +138,7 @@ export function NotesTab({ userId, query, refreshKey = 0, savedNote, onOpenNote 
         <button
           type="button"
           onClick={() => onOpenNote(null)}
-          className="fixed bottom-6 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-xl transition-transform hover:scale-105 sm:bottom-8 sm:right-8 sm:h-14 sm:w-14"
+          className={`fixed bottom-6 right-4 z-40 flex h-12 w-12 items-center justify-center sm:bottom-8 sm:right-8 sm:h-14 sm:w-14 ${WASH_BUTTON_CLASS}`}
           aria-label="New note"
         >
           <Plus className="h-5 w-5 sm:h-6 sm:w-6" />

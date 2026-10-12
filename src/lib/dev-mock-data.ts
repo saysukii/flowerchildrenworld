@@ -49,6 +49,7 @@ export const MOCK_COMMUNITY_STORE: CommunityStore = {
       emergencyContactName: "David Chen",
       emergencyContactPhone: "(555) 201-8842",
       linkedChildren: "Maya Chen",
+      status: "Active",
     },
     {
       id: "mock-guardian-2",
@@ -58,6 +59,7 @@ export const MOCK_COMMUNITY_STORE: CommunityStore = {
       emergencyContactName: "Marco Rodriguez",
       emergencyContactPhone: "(555) 318-4403",
       linkedChildren: "Leo Rodriguez",
+      status: "Active",
     },
     {
       id: "mock-guardian-3",
@@ -67,6 +69,7 @@ export const MOCK_COMMUNITY_STORE: CommunityStore = {
       emergencyContactName: "Keisha Johnson",
       emergencyContactPhone: "(555) 902-7711",
       linkedChildren: "Amara Johnson",
+      status: "Active",
     },
   ],
   volunteers: [
@@ -415,7 +418,7 @@ export type MockTeamMember = {
   email: string;
   phone: string;
   role: "Admin" | "Member";
-  status: "Active" | "Pending";
+  status: "Active" | "Pending" | "Inactive";
   pages: Array<
     | "dashboard"
     | "community"

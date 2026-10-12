@@ -13,7 +13,7 @@ type FilesCardProps = {
 
 export function FilesCard({ title, assets, admin, emptyLabel, onUpload, onDelete }: FilesCardProps) {
   return (
-    <section className="mb-8 rounded-3xl border border-black/5 bg-white px-6 py-7 sm:px-7 sm:py-8">
+    <section className="moss-card mb-8 rounded-3xl px-6 py-7 sm:px-7 sm:py-8">
       <div className="mb-5 flex items-center justify-between gap-3">
         <h2 className="text-lg font-normal">{title}</h2>
         {admin ? (

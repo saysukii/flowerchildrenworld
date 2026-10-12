@@ -25,7 +25,7 @@ function Index() {
     })();
   }, [navigate]);
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-screen items-center justify-center">
       <p className="text-sm text-foreground/50 font-light">Loading…</p>
     </div>
   );

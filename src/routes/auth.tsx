@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import fcwLogo from "@/assets/fcw-full-logo.png.asset.json";
+import { MeadowGround } from "@/components/meadow-ground";
 import { PageEnter } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,7 +74,8 @@ function AuthPage() {
   }
 
   return (
-    <main className="relative flex min-h-[100dvh] w-full items-center justify-center bg-background px-5 pb-8 pt-28 sm:pt-32">
+    <MeadowGround>
+    <main className="relative flex min-h-[100dvh] w-full items-center justify-center px-5 pb-8 pt-28 sm:pt-32">
       <div className="absolute inset-x-0 top-6 flex justify-center sm:top-8">
         <img
           src={fcwLogo.url}
@@ -87,7 +89,7 @@ function AuthPage() {
             Welcome in. A private space — for the hands that build the village.
           </p>
 
-          <div className="w-full max-w-sm rounded-2xl border border-foreground/10 bg-card p-6 shadow-sm">
+          <div className="moss-card w-full max-w-sm rounded-2xl p-6">
           <Tabs value={mode} onValueChange={(v) => setMode(v as "magic" | "password")}>
             <TabsList className="grid w-full grid-cols-2 mb-5">
               <TabsTrigger value="password">Password</TabsTrigger>
@@ -158,7 +160,10 @@ function AuthPage() {
               <span className="w-full border-t border-foreground/10" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-card px-3 text-xs uppercase tracking-wider text-foreground/40">
+              <span
+                className="px-3 text-xs uppercase tracking-wider text-foreground/40"
+                style={{ background: "color-mix(in srgb, #fcfcfc 55%, #f4f7dc)" }}
+              >
                 or
               </span>
             </div>
@@ -180,6 +185,7 @@ function AuthPage() {
         </div>
       </PageEnter>
     </main>
+    </MeadowGround>
   );
 }
 

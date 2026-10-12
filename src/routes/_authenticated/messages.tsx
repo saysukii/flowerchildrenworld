@@ -1,11 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageCircle, Search, Send } from "lucide-react";
-import { AppShell } from "@/components/app-shell";
+import { MessageCircle, Search, Send, SquarePen } from "lucide-react";
 import { Reveal } from "@/components/motion";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { WASH_BUTTON_CLASS } from "@/lib/wash-button";
 import { isDevMock, MOCK_TEAM_MEMBERS } from "@/lib/dev-mock-data";
 import {
   findOrCreateThread,
@@ -115,6 +122,9 @@ function MessagesPage() {
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
   const [mobileShowThread, setMobileShowThread] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [personQuery, setPersonQuery] = useState("");
+  const focusComposer = useRef(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -183,6 +193,17 @@ function MessagesPage() {
     return members.filter((m) => m.id !== current.id && m.status === "Active");
   }, [members, current]);
 
+  const peopleMatchingQuery = useMemo(() => {
+    const q = personQuery.trim().toLowerCase();
+    if (!q) return peopleToMessage;
+    return peopleToMessage.filter(
+      (member) =>
+        member.name.toLowerCase().includes(q) ||
+        member.email.toLowerCase().includes(q) ||
+        member.role.toLowerCase().includes(q),
+    );
+  }, [peopleToMessage, personQuery]);
+
   const mentionOptions = useMemo(() => {
     if (!mentionOpen) return [];
     const q = mentionQuery.toLowerCase();
@@ -192,6 +213,12 @@ function MessagesPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeMessages.length, activeThreadId]);
+
+  useEffect(() => {
+    if (!focusComposer.current || !activeThread) return;
+    focusComposer.current = false;
+    composerRef.current?.focus();
+  }, [activeThread]);
 
   function persist(next: MessagesStore) {
     setStore(next);
@@ -217,6 +244,9 @@ function MessagesPage() {
     if (!current) return;
     const { store: next, thread } = findOrCreateThread(store, current, member);
     persist(next);
+    setComposeOpen(false);
+    setPersonQuery("");
+    focusComposer.current = true;
     openThread(thread);
   }
 
@@ -271,29 +301,37 @@ function MessagesPage() {
 
   if (!ready || !current) {
     return (
-      <AppShell>
-        <div className="mx-auto max-w-6xl py-12 text-center text-sm text-foreground/50">Loading…</div>
-      </AppShell>
+      <div className="mx-auto max-w-6xl py-12 text-center text-sm text-foreground/50">Loading…</div>
     );
   }
 
   return (
-    <AppShell>
+    <>
       <div className="mx-auto flex h-[calc(100dvh-5.5rem)] max-w-6xl flex-col md:h-[calc(100dvh-4rem)]">
         <Reveal className="mb-4 shrink-0 sm:mb-6">
-          <header>
-            <span className="font-label text-[11px] text-foreground/50">Messages</span>
-            <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Team messages</h1>
-            <p className="mt-2 text-sm text-foreground/60">
-              Talk with the team — use @ to mention who you&apos;re speaking to.
-              {admin ? " Admins can message anyone." : ""}
-            </p>
+          <header className="flex items-start justify-between gap-4">
+            <div>
+              <span className="font-label text-[11px] text-foreground/50">Messages</span>
+              <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Team messages</h1>
+              <p className="mt-2 text-sm text-foreground/60">
+                Talk with the team — use @ to mention who you&apos;re speaking to.
+                {admin ? " Admins can message anyone." : ""}
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={() => setComposeOpen(true)}
+              className={`mt-1 shrink-0 ${WASH_BUTTON_CLASS}`}
+            >
+              <SquarePen className="h-4 w-4" />
+              New message
+            </Button>
           </header>
         </Reveal>
 
         <Reveal
           delayMs={80}
-          className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-3xl border border-black/5 bg-white md:grid-cols-[minmax(240px,300px)_1fr]"
+          className="moss-card grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-3xl md:grid-cols-[minmax(240px,300px)_1fr]"
         >
           {/* Conversation list */}
           <aside
@@ -305,48 +343,29 @@ function MessagesPage() {
             <div className="border-b border-black/5 p-4">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/35" />
-                <Input
+                <input
+                  type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search conversations"
-                  className="rounded-full border-black/10 bg-background pl-9"
+                  className="moss-card h-10 w-full rounded-full pl-9 pr-3 text-sm font-light placeholder:text-foreground/40 focus:outline-none focus:ring-1 focus:ring-black/10"
                 />
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="border-b border-black/5 px-4 py-3">
-                <p className="font-label text-[10px] text-foreground/40">Start a conversation</p>
-                <div className="mt-3 space-y-1">
-                  {peopleToMessage.length === 0 ? (
-                    <p className="text-xs font-light text-foreground/45">
-                      Invite teammates in Settings to message them.
-                    </p>
-                  ) : (
-                    peopleToMessage.map((member) => (
-                      <button
-                        key={member.id}
-                        type="button"
-                        onClick={() => startConversation(member)}
-                        className="flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-black/[0.03]"
-                      >
-                        <ProfileAvatar name={member.name} size="sm" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-normal">{member.name}</p>
-                          <p className="truncate text-[11px] font-light text-foreground/45">
-                            {member.role}
-                          </p>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-
               {filteredThreads.length === 0 ? (
                 <div className="px-4 py-10 text-center">
                   <MessageCircle className="mx-auto h-8 w-8 text-foreground/20" />
                   <p className="mt-3 text-sm font-light text-foreground/45">No conversations yet</p>
+                  <Button
+                    type="button"
+                    onClick={() => setComposeOpen(true)}
+                    className={`mt-4 ${WASH_BUTTON_CLASS}`}
+                  >
+                    <SquarePen className="h-4 w-4" />
+                    New message
+                  </Button>
                 </div>
               ) : (
                 <ul className="p-2">
@@ -398,9 +417,10 @@ function MessagesPage() {
                                 {lastMessagePreview(store, thread.id)}
                               </p>
                               {unread > 0 && !active ? (
-                                <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[#3AB819] px-1 text-[10px] font-medium leading-none text-white">
-                                  {unread > 9 ? "9+" : unread}
-                                </span>
+                                <span
+                                  className="moss-unread"
+                                  aria-label={`${unread} unread`}
+                                />
                               ) : null}
                             </div>
                           </div>
@@ -426,6 +446,14 @@ function MessagesPage() {
                 <p className="mt-4 text-sm font-light text-foreground/45">
                   Choose a teammate to start messaging
                 </p>
+                <Button
+                  type="button"
+                  onClick={() => setComposeOpen(true)}
+                  className={`mt-4 ${WASH_BUTTON_CLASS}`}
+                >
+                  <SquarePen className="h-4 w-4" />
+                  New message
+                </Button>
               </div>
             ) : (
               <>
@@ -498,7 +526,7 @@ function MessagesPage() {
 
                 <div className="relative border-t border-black/5 p-4 sm:p-5">
                   {mentionOpen && mentionOptions.length > 0 ? (
-                    <div className="absolute bottom-full left-4 right-4 mb-2 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-md sm:left-5 sm:right-5">
+                    <div className="moss-dialog absolute bottom-full left-4 right-4 mb-2 overflow-hidden rounded-2xl sm:left-5 sm:right-5">
                       {mentionOptions.map((member, index) => (
                         <button
                           key={member.id}
@@ -555,7 +583,7 @@ function MessagesPage() {
                         }
                       }}
                       rows={2}
-                      placeholder={`Message ${threadPartnerName(activeThread, current.id)}… Type @ to mention`}
+                      placeholder="Type your message"
                       className="min-h-[2.75rem] flex-1 resize-none rounded-2xl border border-black/10 bg-background px-4 py-3 text-sm font-light outline-none ring-offset-background placeholder:text-foreground/35 focus-visible:ring-2 focus-visible:ring-ring"
                     />
                     <Button
@@ -578,6 +606,62 @@ function MessagesPage() {
           </section>
         </Reveal>
       </div>
-    </AppShell>
+
+      <Dialog
+        open={composeOpen}
+        onOpenChange={(open) => {
+          setComposeOpen(open);
+          if (!open) setPersonQuery("");
+        }}
+      >
+        <DialogContent className="moss-dialog max-w-md gap-0 p-0">
+          <DialogHeader className="px-5 pb-3 pt-5">
+            <DialogTitle className="text-lg font-normal">New message</DialogTitle>
+            <DialogDescription className="font-light">
+              Choose who you&apos;re writing to. You&apos;ll land in the conversation, ready to type.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-5 pb-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/35" />
+              <Input
+                autoFocus
+                value={personQuery}
+                onChange={(e) => setPersonQuery(e.target.value)}
+                placeholder="Search people"
+                className="rounded-full border-black/10 bg-[#FCFCFC]/80 pl-9"
+              />
+            </div>
+          </div>
+          <div className="max-h-80 overflow-y-auto px-2 pb-3">
+            {peopleMatchingQuery.length === 0 ? (
+              <p className="px-3 py-8 text-center text-sm font-light text-foreground/50">
+                {peopleToMessage.length === 0
+                  ? "Invite teammates in Settings to message them."
+                  : "No one matches that search."}
+              </p>
+            ) : (
+              peopleMatchingQuery.map((member) => (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => startConversation(member)}
+                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-black/[0.04]"
+                >
+                  <ProfileAvatar name={member.name} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-normal">{member.name}</p>
+                    <p className="truncate text-[11px] font-light text-foreground/45">
+                      {member.role}
+                      {member.email ? ` · ${member.email}` : ""}
+                    </p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { AppShell } from "@/components/app-shell";
 import { Reveal } from "@/components/motion";
 import {
   AlertDialog,
@@ -124,8 +123,7 @@ function RoutinePulsePage() {
   );
 
   return (
-    <AppShell>
-      <div className="mx-auto max-w-3xl text-[#020202]" style={{ background: "#FCFCFC" }}>
+      <div className="mx-auto max-w-3xl text-[#020202]">
         <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <span className="font-label text-[11px] text-foreground/50">Routine Pulse</span>
@@ -153,7 +151,7 @@ function RoutinePulsePage() {
               <section>
                 <h2 className="font-label mb-3 text-[11px] text-foreground/50">{short}</h2>
                 {ritual ? (
-                  <div className="rounded-2xl border border-black/5 bg-white px-4 py-4 sm:px-5">
+                  <div className="moss-card rounded-2xl px-4 py-4 sm:px-5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <p className="font-label text-[11px] text-foreground/50">{short}</p>
@@ -191,7 +189,7 @@ function RoutinePulsePage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="rounded-2xl border border-dashed border-black/10 bg-white/50 px-4 py-4 text-sm text-foreground/40">
+                  <p className="moss-card rounded-2xl border-dashed px-4 py-4 text-sm text-foreground/40">
                     No ritual set
                   </p>
                 )}
@@ -290,6 +288,5 @@ function RoutinePulsePage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </AppShell>
   );
 }

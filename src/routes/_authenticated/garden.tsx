@@ -1,7 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
-import { AppShell } from "@/components/app-shell";
 import { Reveal } from "@/components/motion";
 import { PageLabel } from "@/components/page-label";
 import { NoteEditorPanel } from "@/components/garden/note-editor-panel";
@@ -64,7 +63,6 @@ function GardenPage() {
   }, []);
 
   return (
-    <AppShell>
       <div className="mx-auto max-w-6xl text-[#020202]">
         <Reveal>
           <header className={cn("mb-5 sm:mb-8", isWhiteboardMobile && "mb-3")}>
@@ -112,7 +110,7 @@ function GardenPage() {
                 value={noteQuery}
                 onChange={(e) => setNoteQuery(e.target.value)}
                 placeholder="Search notes"
-                className="h-10 w-full rounded-full border-0 bg-black/[0.04] pl-9 pr-3 text-sm font-light placeholder:text-foreground/40 focus:bg-white focus:outline-none focus:ring-1 focus:ring-black/10"
+                className="moss-card h-10 w-full rounded-full pl-9 pr-3 text-sm font-light placeholder:text-foreground/40 focus:outline-none focus:ring-1 focus:ring-black/10"
               />
             </div>
           ) : null}
@@ -157,6 +155,5 @@ function GardenPage() {
           />
         ) : null}
       </div>
-    </AppShell>
   );
 }

@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import { ChevronDown } from "lucide-react";
-import { AppShell } from "@/components/app-shell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,10 +15,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { fetchStripeDonationAnalytics } from "@/lib/api/stripe.functions";
+import { liveCommunityGroup, liveEngagementGroup, liveGrowthPoints } from "@/lib/community-analytics";
+import { COMMUNITY_UPDATED_EVENT, loadCommunityStore, type CommunityStore } from "@/lib/community";
 import {
   getAnalyticsYears,
   getMockAnalyticsGroups,
-  getMockGrowthPoints,
   GROWTH_MONTH_LABELS,
   isDevMock,
   MOCK_STRIPE_DONATIONS,
@@ -174,6 +174,23 @@ function AnalyticsPage() {
     isDevMock ? MOCK_STRIPE_DONATIONS : EMPTY_STRIPE_DONATIONS,
   );
   const [loadingStripe, setLoadingStripe] = useState(!isDevMock);
+  const [community, setCommunity] = useState<CommunityStore>({
+    children: [],
+    guardians: [],
+    volunteers: [],
+    partners: [],
+  });
+
+  useEffect(() => {
+    const refresh = () => setCommunity(loadCommunityStore());
+    refresh();
+    window.addEventListener(COMMUNITY_UPDATED_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener(COMMUNITY_UPDATED_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
 
   useEffect(() => {
     if (isDevMock) return;
@@ -197,23 +214,25 @@ function AnalyticsPage() {
   }, []);
 
   const groups = useMemo(() => {
-    if (isDevMock) return getMockAnalyticsGroups(selectedYear);
-    const donations = donationsGroup(stripe, admin && loadingStripe);
+    const sample = isDevMock ? getMockAnalyticsGroups(selectedYear) : null;
+    const events = sample?.find((group) => group.key === "events") ?? STATIC_GROUPS[1]!;
+    const donations = isDevMock
+      ? (sample?.find((group) => group.key === "donations") ?? donationsGroup(stripe, false))
+      : donationsGroup(stripe, admin && loadingStripe);
     return [
-      STATIC_GROUPS[0],
-      STATIC_GROUPS[1],
+      liveCommunityGroup(community, selectedYear),
+      events,
       donations,
-      STATIC_GROUPS[2],
+      liveEngagementGroup(community, selectedYear),
     ];
-  }, [admin, loadingStripe, selectedYear, stripe]);
+  }, [admin, community, loadingStripe, selectedYear, stripe]);
 
   const growthPoints = useMemo(
-    () => (isDevMock ? getMockGrowthPoints(selectedYear) : []),
-    [selectedYear],
+    () => liveGrowthPoints(community, selectedYear),
+    [community, selectedYear],
   );
 
   return (
-    <AppShell>
       <div className="mx-auto max-w-6xl">
         <header className="mb-6 sm:mb-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -250,32 +269,15 @@ function AnalyticsPage() {
           ))}
         </div>
 
-        <section className="mt-10 rounded-3xl border border-black/5 bg-white px-5 py-7 sm:px-8 sm:py-10">
-          {isDevMock ? (
-            <GrowthChart
-              key={selectedYear}
-              year={selectedYear}
-              points={growthPoints}
-              labels={[...GROWTH_MONTH_LABELS]}
-            />
-          ) : (
-            <>
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-                <h3 className="text-lg font-normal">Community growth over time</h3>
-                <p className="text-xs font-light text-foreground/45">
-                  {selectedYear} · total community records by month
-                </p>
-              </div>
-              <div className="relative mt-6 flex h-56 items-center justify-center rounded-2xl border border-dashed border-black/10">
-                <p className="px-4 text-center text-sm text-foreground/40">
-                  Data will appear as your community grows.
-                </p>
-              </div>
-            </>
-          )}
+        <section className="moss-card mt-10 rounded-3xl px-5 py-7 sm:px-8 sm:py-10">
+          <GrowthChart
+            key={`${selectedYear}-${growthPoints.join(",")}`}
+            year={selectedYear}
+            points={growthPoints}
+            labels={[...GROWTH_MONTH_LABELS]}
+          />
         </section>
       </div>
-    </AppShell>
   );
 }
 
@@ -296,7 +298,7 @@ function YearSelector({
         <button
           type="button"
           aria-label="Select analytics year"
-          className="inline-flex h-9 shrink-0 items-center gap-1 self-start rounded-full border border-foreground/20 px-3 text-sm font-normal tabular-nums text-foreground transition-colors hover:bg-black/[0.03]"
+          className="moss-card inline-flex h-9 shrink-0 items-center gap-1 self-start rounded-full px-3 text-sm font-normal tabular-nums text-foreground transition-colors hover:bg-white/70"
         >
           {value}
           <ChevronDown className="h-3.5 w-3.5 text-foreground/40" />
@@ -380,7 +382,7 @@ function MetricCard({ metric, fadeDelayMs = 0 }: { metric: Metric; fadeDelayMs?:
   }
 
   return (
-    <div className="flex h-full flex-col rounded-3xl border border-black/5 bg-white px-5 py-5 sm:px-6 sm:py-6">
+    <div className="moss-card flex h-full flex-col rounded-3xl px-5 py-5 sm:px-6 sm:py-6">
       <p className="min-h-8 text-xs font-light leading-snug text-foreground/60">{metric.label}</p>
       <p className="mt-2 flex-1 text-2xl font-normal leading-none tabular-nums">
         <FadeInNumber delayMs={fadeDelayMs}>{metric.value}</FadeInNumber>
@@ -416,7 +418,7 @@ function RecentDonorsCard({
     >
       <div
         className={cn(
-          "flex h-full flex-col rounded-3xl border border-black/5 bg-white px-5 py-5 sm:px-6 sm:py-6",
+          "moss-card flex h-full flex-col rounded-3xl px-5 py-5 sm:px-6 sm:py-6",
           open && "invisible",
         )}
       >
@@ -440,7 +442,7 @@ function RecentDonorsCard({
       </div>
 
       {open ? (
-        <div className="absolute inset-0 z-10 flex flex-col rounded-3xl border border-black/5 bg-white px-5 py-5 sm:px-6 sm:py-6">
+        <div className="moss-card absolute inset-0 z-10 flex flex-col rounded-3xl px-5 py-5 sm:px-6 sm:py-6">
           <div className="flex items-start justify-between gap-3">
             <p className="min-h-8 text-xs font-light leading-snug text-foreground/60">{metric.label}</p>
             {isMobile ? (

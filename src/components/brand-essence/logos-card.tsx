@@ -90,12 +90,12 @@ export function LogosCard({ assets, admin, onUpload, onAssetsChange }: LogosCard
   const uploadedLogos = filterBrandAssets(assets, "logos");
 
   function handleDelete(id: string) {
-    removeBrandAsset(id);
+    void removeBrandAsset(id);
     onAssetsChange(assets.filter((asset) => asset.id !== id));
   }
 
   return (
-    <section className="rounded-3xl border border-black/5 bg-white px-6 py-7 sm:px-7 sm:py-8">
+    <section className="moss-card rounded-3xl px-6 py-7 sm:px-7 sm:py-8">
       <div className="mb-5 flex items-center justify-between gap-3">
         <h2 className="text-lg font-normal">Logo Suite</h2>
         {admin ? (

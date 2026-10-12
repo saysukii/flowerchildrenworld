@@ -63,7 +63,7 @@ export function MissionCard({ admin }: { admin: boolean }) {
   }
 
   return (
-    <section className="group rounded-3xl border border-black/5 bg-white px-6 py-7 sm:px-7 sm:py-8">
+    <section className="moss-card group rounded-3xl px-6 py-7 sm:px-7 sm:py-8">
       <div className="mb-5 flex items-start justify-between gap-3">
         <h2 className="text-lg font-normal">Mission</h2>
         {admin && !editing ? (
