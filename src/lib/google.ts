@@ -105,6 +105,12 @@ export async function fetchPrimaryCalendarEvents(accessToken: string): Promise<G
     .map(({ sortKey: _sortKey, ...event }) => event);
 }
 
+function isHolidayCalendar(calendar: { id?: string; summary?: string }) {
+  const id = calendar.id?.toLowerCase() ?? "";
+  const name = calendar.summary?.trim().toLowerCase() ?? "";
+  return id.includes("#holiday@group.v.calendar.google.com") || name.startsWith("holidays in ");
+}
+
 async function listSelectedCalendars(accessToken: string) {
   const response = await fetch(
     "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&showHidden=false",
@@ -121,7 +127,7 @@ async function listSelectedCalendars(accessToken: string) {
     items?: Array<{ id?: string; summary?: string; selected?: boolean; primary?: boolean }>;
   };
   const calendars = (payload.items ?? [])
-    .filter((calendar) => calendar.id && calendar.selected !== false)
+    .filter((calendar) => calendar.id && calendar.selected !== false && !isHolidayCalendar(calendar))
     .map((calendar) => ({ id: calendar.id as string, name: calendar.primary ? "" : calendar.summary ?? "" }));
   return calendars.length > 0 ? calendars : [{ id: "primary", name: "" }];
 }

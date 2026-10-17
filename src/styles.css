@@ -13,6 +13,38 @@
   paint-order: normal;
 }
 
+.fcw-date-menus,
+.fcw-date-menus .rdp-months,
+.fcw-date-menus .rdp-month,
+.fcw-date-menus .rdp-month_grid {
+  width: 100%;
+  max-width: none;
+}
+
+.fcw-date-menus .rdp-month_grid {
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.fcw-date-menus .rdp-weekdays,
+.fcw-date-menus .rdp-week {
+  display: table-row;
+  width: 100%;
+}
+
+.fcw-date-menus .rdp-weekday,
+.fcw-date-menus .rdp-day {
+  width: 14.2857%;
+  text-align: center;
+  padding: 0;
+}
+
+.fcw-date-menus .rdp-day_button {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-inline: auto;
+}
+
 .library-menu-items-container__header--excal,
 .library-menu-items-container__header--excal + div,
 .library-menu-browse-button,

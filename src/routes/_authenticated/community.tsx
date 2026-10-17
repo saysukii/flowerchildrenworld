@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { DatePickerChoices } from "@/components/community/date-picker";
+import { DateMenus } from "@/components/community/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FILTER_INPUT_CLASS } from "@/components/community/filter-control-styles";
 import { formatUsPhone } from "@/lib/phone";
 import {
@@ -1128,32 +1127,33 @@ function DateField({
   }, [open, value, birth]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className={cn(inputCls, "flex items-center justify-between text-left")}>
-          <span className={value ? "text-foreground" : "text-foreground/40"}>{value ? formatDob(value) : "MM/DD/YY"}</span>
-          <CalendarDays className="h-4 w-4 shrink-0 text-foreground/45" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        style={{ width: "var(--radix-popover-trigger-width)" }}
-        className="moss-dialog z-[80] w-[var(--radix-popover-trigger-width)] rounded-2xl border-black/10 p-3 shadow-none"
+    <div className="w-full">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className={cn(inputCls, "flex w-full items-center justify-between text-left")}
       >
-        <DatePickerChoices
-          visible={visible}
-          onVisibleChange={setVisible}
-          selected={selected}
-          minYear={minYear}
-          maxYear={maxYear}
-          disableAfter={birth ? now : undefined}
-          onSelect={(date, commit = true) => {
-            onChange(localDateToIso(date));
-            if (commit) setOpen(false);
-          }}
-        />
-      </PopoverContent>
-    </Popover>
+        <span className={value ? "text-foreground" : "text-foreground/40"}>{value ? formatDob(value) : "MM/DD/YY"}</span>
+        <CalendarDays className="h-4 w-4 shrink-0 text-foreground/45" />
+      </button>
+      {open ? (
+        <div className="mt-2 w-full rounded-2xl border border-black/10 p-3">
+          <DateMenus
+            visible={visible}
+            onVisibleChange={setVisible}
+            selected={selected}
+            minYear={minYear}
+            maxYear={maxYear}
+            disableAfter={birth ? now : undefined}
+            onSelect={(date) => {
+              onChange(localDateToIso(date));
+              setOpen(false);
+            }}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
