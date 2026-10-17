@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Import, Loader2, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronDown, Import, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import {
   type CommunityTab,
+  formatChildRow,
+  formatGuardianRow,
+  formatPartnerRow,
+  formatVolunteerRow,
   parseCommunityCsv,
   rowsToRecords,
   type ChildRecord,
@@ -33,6 +37,58 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 type CommunityRecord = ChildRecord | GuardianRecord | VolunteerRecord | PartnerRecord;
+
+type ImportPreview = {
+  records: CommunityRecord[];
+  unmappedHeaders: string[];
+  skipped: number;
+};
+
+const PREVIEW_COLUMNS: Record<CommunityTab, string[]> = {
+  children: ["Status", "Name", "Program", "DOB"],
+  guardians: ["Status", "Name", "Email", "Phone", "Linked Children"],
+  volunteers: ["Status", "Name", "Email", "Phone", "Skills"],
+  partners: ["Status", "Name", "Organization", "Email", "Partnership Type"],
+};
+
+const TYPE_DOT: Record<string, string> = {
+  "Full-Time": "bg-[#3AB819]",
+  "Drop-In": "bg-[#E0B15A]",
+  Event: "bg-[#6E93B8]",
+  Community: "bg-[#3AB819]",
+  Corporate: "bg-[#020202]",
+  Media: "bg-[#D4896A]",
+  Other: "bg-foreground/35",
+};
+
+function friendlySheetError(message: string) {
+  const text = message.trim();
+  const lower = text.toLowerCase();
+  if (lower.includes("connect google") || lower.includes("google access is not enabled")) {
+    return "Connect Google in Settings, then try again.";
+  }
+  if (lower.includes("sheets.googleapis.com") || (lower.includes("sheets") && lower.includes("disabled"))) {
+    return "Google Sheets is turned off for this project.";
+  }
+  if (lower.includes("drive.googleapis.com") || (lower.includes("drive api") && (lower.includes("disabled") || lower.includes("has not been used")))) {
+    return "Google Drive is turned off for this project.";
+  }
+  if (lower.includes("insufficient") || lower.includes("permission denied")) {
+    return "Reconnect Google in Settings so this sheet can be read.";
+  }
+  if (text.length > 160) return "That sheet could not be previewed.";
+  return text;
+}
+
+function toastSheetError(message: string) {
+  toast.error(friendlySheetError(message));
+}
+
+function readyLabel(count: number, tabLabel: string) {
+  const plural = tabLabel.toLowerCase();
+  const singular = plural === "children" ? "child" : plural.endsWith("s") ? plural.slice(0, -1) : plural;
+  return `${count} ${count === 1 ? singular : plural} ready to import`;
+}
 
 type SheetsImportDialogProps = {
   tab: CommunityTab;
@@ -64,8 +120,8 @@ export function SheetsImportDialog({
   const [tabs, setTabs] = useState<string[]>([]);
   const [loadingSpreadsheets, setLoadingSpreadsheets] = useState(false);
   const [loadingTabs, setLoadingTabs] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [preview, setPreview] = useState<ReturnType<typeof parseCommunityCsv> | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
 
   const filteredSpreadsheets = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -105,13 +161,13 @@ export function SheetsImportDialog({
       const token = await getAccessToken();
       const sheetTabs = await fetchSpreadsheetTabs(spreadsheetId, token);
       if (sheetTabs.length === 0) {
-        toast.error("No tabs found in that spreadsheet.");
+        toastSheetError("No tabs found in that spreadsheet.");
         return;
       }
       setTabs(sheetTabs);
       setSheetTab(sheetTabs[0] ?? "");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not load spreadsheet tabs.");
+      toastSheetError(error instanceof Error ? error.message : "Could not load spreadsheet tabs.");
     } finally {
       setLoadingTabs(false);
     }
@@ -138,7 +194,7 @@ export function SheetsImportDialog({
         if (preferredId) void loadTabsForSpreadsheet(preferredId);
       } catch (error) {
         if (!cancelled) {
-          toast.error(error instanceof Error ? error.message : "Could not load your spreadsheets.");
+          toastSheetError(error instanceof Error ? error.message : "Could not load your spreadsheets.");
         }
       } finally {
         if (!cancelled) setLoadingSpreadsheets(false);
@@ -165,11 +221,11 @@ export function SheetsImportDialog({
 
   async function handlePreview() {
     if (!selectedId || !sheetTab) {
-      toast.error("Choose a spreadsheet and tab first.");
+      toastSheetError("Choose a spreadsheet and tab first.");
       return;
     }
 
-    setImporting(true);
+    setPreviewing(true);
     setPreview(null);
     try {
       const token = await getAccessToken();
@@ -179,29 +235,36 @@ export function SheetsImportDialog({
         token,
       );
       if (values.length === 0) {
-        toast.error("That tab is empty.");
+        toastSheetError("That tab is empty.");
         return;
       }
       const csv = sheetValuesToCsv(values);
       const result = parseCommunityCsv(tab, csv);
-      setPreview(result);
-      if (result.errors.length > 0) toast.error(result.errors[0]);
+      if (result.errors.length > 0) {
+        toastSheetError(result.errors[0] ?? "That sheet could not be previewed.");
+        return;
+      }
+      const records = rowsToRecords(tab, result.rows);
+      if (records.length === 0) {
+        toastSheetError(`No ${tabLabel.toLowerCase()} in that tab could be imported.`);
+        return;
+      }
+      setPreview({
+        records,
+        unmappedHeaders: result.unmappedHeaders,
+        skipped: result.rows.length - records.length,
+      });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not read that sheet.");
+      toastSheetError(error instanceof Error ? error.message : "Could not read that sheet.");
     } finally {
-      setImporting(false);
+      setPreviewing(false);
     }
   }
 
   function handleImport() {
-    if (!preview || preview.errors.length > 0 || preview.rows.length === 0) return;
-    const records = rowsToRecords(tab, preview.rows);
-    if (records.length === 0) {
-      toast.error("No valid rows found to import.");
-      return;
-    }
-    onImport(records);
-    toast.success(`Imported ${records.length} ${tabLabel.toLowerCase()} record${records.length === 1 ? "" : "s"}.`);
+    if (!preview || preview.records.length === 0) return;
+    onImport(preview.records);
+    toast.success(`Imported ${preview.records.length} ${tabLabel.toLowerCase()} record${preview.records.length === 1 ? "" : "s"}.`);
     onOpenChange(false);
     reset();
   }
@@ -214,7 +277,21 @@ export function SheetsImportDialog({
         if (!next) reset();
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="sm:max-w-lg"
+        onPointerDownOutside={(event) => {
+          if (preview) event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          if (preview) event.preventDefault();
+        }}
+        onFocusOutside={(event) => {
+          if (preview) event.preventDefault();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (preview) event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="font-normal">Import from Google Sheets</DialogTitle>
         </DialogHeader>
@@ -302,69 +379,199 @@ export function SheetsImportDialog({
           ) : tabs.length > 0 ? (
             <div className="space-y-2">
               <Label htmlFor="sheet-tab">Sheet tab</Label>
-              <select
-                id="sheet-tab"
-                value={sheetTab}
-                onChange={(e) => {
-                  setSheetTab(e.target.value);
-                  setPreview(null);
-                }}
-                className="w-full rounded-md border border-black/10 bg-white px-3 py-2 text-sm font-light focus:border-foreground/30 focus:outline-none"
-              >
-                {tabs.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  id="sheet-tab"
+                  value={sheetTab}
+                  onChange={(e) => {
+                    setSheetTab(e.target.value);
+                    setPreview(null);
+                  }}
+                  className="h-12 w-full appearance-none rounded-xl border border-black/10 bg-white pl-4 pr-12 text-sm font-light focus:border-foreground/30 focus:outline-none"
+                >
+                  {tabs.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/45" />
+              </div>
             </div>
           ) : null}
-
-          {preview && (
-            <div className="space-y-3 rounded-2xl border border-black/5 bg-[#FCFCFC] px-4 py-4 text-sm">
-              <p className="font-normal">
-                {preview.rows.length} row{preview.rows.length === 1 ? "" : "s"} ready to import
-              </p>
-              {preview.unmappedHeaders.length > 0 && (
-                <p className="text-foreground/60">
-                  Unmapped columns (skipped): {preview.unmappedHeaders.join(", ")}
-                </p>
-              )}
-              {preview.errors.length > 0 && (
-                <p className="text-[#C53D3D]">{preview.errors.join(" ")}</p>
-              )}
-            </div>
-          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          {preview ? (
+          <Button
+            type="button"
+            disabled={previewing || !selectedId || !sheetTab || loadingTabs}
+            onClick={() => void handlePreview()}
+            className="text-white hover:opacity-90"
+            style={{ background: "#3AB819" }}
+          >
+            {previewing ? <Loader2 className="size-4 animate-spin" /> : "Preview"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+      <Dialog open={Boolean(preview)} onOpenChange={(next) => { if (!next) setPreview(null); }}>
+        <DialogContent overlayClassName="z-[70]" className="z-[70] sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="font-normal">Preview</DialogTitle>
+          </DialogHeader>
+          {preview ? <ImportPreviewTable tab={tab} tabLabel={tabLabel} preview={preview} /> : null}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setPreview(null)}>
+              Back
+            </Button>
             <Button
               type="button"
-              disabled={preview.errors.length > 0 || preview.rows.length === 0}
+              disabled={!preview || preview.records.length === 0}
               onClick={handleImport}
               className="text-white hover:opacity-90"
               style={{ background: "#3AB819" }}
             >
               Import
             </Button>
-          ) : (
-            <Button
-              type="button"
-              disabled={importing || !selectedId || !sheetTab || loadingTabs}
-              onClick={() => void handlePreview()}
-              className="text-white hover:opacity-90"
-              style={{ background: "#3AB819" }}
-            >
-              {importing ? <Loader2 className="size-4 animate-spin" /> : "Preview import"}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
+  );
+}
+
+function StatusPill({ value }: { value: string }) {
+  const active = value === "Active";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-xs font-normal",
+        active ? "bg-[#3AB819]/15 text-[#1f6b12]" : "bg-black/[0.05] text-foreground/55",
+      )}
+    >
+      {value || "—"}
+    </span>
+  );
+}
+
+function TypeDot({ value }: { value: string }) {
+  if (!value) return <span className="text-foreground/40">—</span>;
+  return (
+    <span className="inline-flex items-center gap-2 font-light text-foreground/70">
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", TYPE_DOT[value] ?? "bg-foreground/35")} />
+      {value}
+    </span>
+  );
+}
+
+function previewCells(tab: CommunityTab, record: CommunityRecord) {
+  if (tab === "children" && "dateOfBirth" in record) {
+    const row = formatChildRow(record);
+    return {
+      status: row.status,
+      cells: [
+        row.name,
+        <TypeDot key="program" value={row.program} />,
+        row.dob || "—",
+      ],
+    };
+  }
+  if (tab === "guardians" && "guardianName" in record) {
+    const row = formatGuardianRow(record);
+    return {
+      status: row.status,
+      cells: [row.name, row.email || "—", row.phone || "—", row.linkedChildren || "—"],
+    };
+  }
+  if (tab === "volunteers" && "skills" in record) {
+    const row = formatVolunteerRow(record);
+    return {
+      status: row.status,
+      cells: [row.name, row.email || "—", row.phone || "—", row.skills || "—"],
+    };
+  }
+  if (tab === "partners" && "organizationName" in record) {
+    const row = formatPartnerRow(record);
+    return {
+      status: row.status,
+      cells: [
+        row.name,
+        row.organization || "—",
+        row.email || "—",
+        <TypeDot key="type" value={row.partnershipType} />,
+      ],
+    };
+  }
+  return { status: "", cells: [] as ReactNode[] };
+}
+
+function ImportPreviewTable({
+  tab,
+  tabLabel,
+  preview,
+}: {
+  tab: CommunityTab;
+  tabLabel: string;
+  preview: ImportPreview;
+}) {
+  const columns = PREVIEW_COLUMNS[tab];
+  const count = preview.records.length;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-black/5 bg-[#FCFCFC]">
+      <div className="border-b border-black/5 px-4 py-3">
+        <p className="text-sm font-normal">{readyLabel(count, tabLabel)}</p>
+      </div>
+      <div className="max-h-[min(50dvh,420px)] overflow-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-black/5 text-[11px] font-normal text-foreground/40">
+              {columns.map((column) => (
+                <th key={column} className="whitespace-nowrap px-4 py-2.5 font-normal">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {preview.records.map((record) => {
+              const row = previewCells(tab, record);
+              return (
+                <tr key={record.id} className="border-b border-black/5 last:border-0">
+                  <td className="whitespace-nowrap px-4 py-2.5">
+                    <StatusPill value={row.status} />
+                  </td>
+                  {row.cells.map((cell, index) => (
+                    <td
+                      key={columns[index + 1] ?? index}
+                      className={cn(
+                        "max-w-[12rem] truncate whitespace-nowrap px-4 py-2.5",
+                        index === 0 ? "font-normal text-foreground" : "font-light text-foreground/70",
+                      )}
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {preview.unmappedHeaders.length > 0 || preview.skipped > 0 ? (
+        <div className="space-y-1 border-t border-black/5 px-4 py-3 text-xs text-foreground/50">
+          {preview.skipped > 0 ? (
+            <p>
+              {preview.skipped} row{preview.skipped === 1 ? "" : "s"} left out because a name was missing.
+            </p>
+          ) : null}
+          {preview.unmappedHeaders.length > 0 ? (
+            <p>Columns left out: {preview.unmappedHeaders.join(", ")}</p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

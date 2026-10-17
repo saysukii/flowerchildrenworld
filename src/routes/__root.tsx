@@ -115,7 +115,12 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <GlitterCursorTrail />
       <Outlet />
-      <Toaster position="bottom-center" toastOptions={{ className: "mb-[env(safe-area-inset-bottom,0px)]" }} />
+      <Toaster
+        position="bottom-center"
+        toastOptions={{
+          className: "fcw-toast mb-[env(safe-area-inset-bottom,0px)]",
+        }}
+      />
     </QueryClientProvider>
   );
 }
