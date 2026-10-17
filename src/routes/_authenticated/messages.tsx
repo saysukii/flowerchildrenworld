@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageCircle, Search, Send, SquarePen } from "lucide-react";
+import { Check, MessageCircle, Search, Send, SquarePen } from "lucide-react";
+import { toast } from "sonner";
 import { Reveal } from "@/components/motion";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { Button } from "@/components/ui/button";
@@ -13,14 +14,23 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { WASH_BUTTON_CLASS } from "@/lib/wash-button";
+import { sendMentionEmails } from "@/lib/api/email.functions";
 import { isDevMock, MOCK_TEAM_MEMBERS } from "@/lib/dev-mock-data";
 import {
-  findOrCreateThread,
+  caretOffset,
+  composerHtml,
+  placeCaret,
+  readComposerText,
+} from "@/lib/message-composer";
+import {
+  findOrCreateGroup,
   formatMessageTime,
+  isGroupThread,
   lastMessagePreview,
   loadMessagesStore,
   markThreadRead,
   mentionSegments,
+  parseMentions,
   messagesForThread,
   saveMessagesStore,
   sendMessage,
@@ -117,6 +127,7 @@ function MessagesPage() {
   });
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [draft, setDraft] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
@@ -124,9 +135,15 @@ function MessagesPage() {
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [personQuery, setPersonQuery] = useState("");
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const focusComposer = useRef(false);
-  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+  const paintedHtmlRef = useRef("");
+  const mentionNamesRef = useRef<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const identityRef = useRef<{ email: string; name: string; admin: boolean; userId: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     void (async () => {
@@ -139,6 +156,7 @@ function MessagesPage() {
 
       const userIsAdmin = isAdmin(user);
       const name = getDisplayName(user);
+      identityRef.current = { email: user.email, name, admin: userIsAdmin, userId: user.id };
       const directory = mergeTeamDirectory(user.email, name, userIsAdmin);
       const me = resolveCurrentMember(directory, user.email, name, user.id);
 
@@ -152,6 +170,29 @@ function MessagesPage() {
 
   useEffect(() => {
     return subscribeMessagesChanged(() => setStore(loadMessagesStore()));
+  }, []);
+
+  function reloadDirectory() {
+    const identity = identityRef.current;
+    if (!identity) return;
+    const directory = mergeTeamDirectory(identity.email, identity.name, identity.admin);
+    setMembers(directory);
+    setCurrent(resolveCurrentMember(directory, identity.email, identity.name, identity.userId));
+  }
+
+  useEffect(() => {
+    function onStorage(event: StorageEvent) {
+      if (event.key && event.key !== "fcw-team-members") return;
+      reloadDirectory();
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("fcw-page-access-changed", reloadDirectory);
+    window.addEventListener("focus", reloadDirectory);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("fcw-page-access-changed", reloadDirectory);
+      window.removeEventListener("focus", reloadDirectory);
+    };
   }, []);
 
   useEffect(() => {
@@ -190,8 +231,10 @@ function MessagesPage() {
 
   const peopleToMessage = useMemo(() => {
     if (!current) return [];
-    return members.filter((m) => m.id !== current.id && m.status === "Active");
+    return members.filter((m) => m.id !== current.id && m.status !== "Inactive");
   }, [members, current]);
+
+  mentionNamesRef.current = peopleToMessage.map((member) => member.name);
 
   const peopleMatchingQuery = useMemo(() => {
     const q = personQuery.trim().toLowerCase();
@@ -203,6 +246,18 @@ function MessagesPage() {
         member.role.toLowerCase().includes(q),
     );
   }, [peopleToMessage, personQuery]);
+
+  const peopleFromSearch = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q && !searchFocused) return [];
+    if (!q) return peopleToMessage;
+    return peopleToMessage.filter(
+      (member) =>
+        member.name.toLowerCase().includes(q) ||
+        member.email.toLowerCase().includes(q) ||
+        member.role.toLowerCase().includes(q),
+    );
+  }, [peopleToMessage, query, searchFocused]);
 
   const mentionOptions = useMemo(() => {
     if (!mentionOpen) return [];
@@ -240,19 +295,41 @@ function MessagesPage() {
     });
   }
 
-  function startConversation(member: TeamMember) {
-    if (!current) return;
-    const { store: next, thread } = findOrCreateThread(store, current, member);
+  function startConversation(people: TeamMember[]) {
+    if (!current || people.length === 0) return;
+    const { store: next, thread } = findOrCreateGroup(store, current, people);
     persist(next);
     setComposeOpen(false);
     setPersonQuery("");
+    setSelectedPeople([]);
     focusComposer.current = true;
     openThread(thread);
   }
 
-  function onDraftChange(value: string) {
+  function togglePerson(memberId: string) {
+    setSelectedPeople((currentIds) =>
+      currentIds.includes(memberId)
+        ? currentIds.filter((id) => id !== memberId)
+        : [...currentIds, memberId],
+    );
+  }
+
+  function paintComposer(value: string, caret: number | null) {
+    const el = composerRef.current;
+    if (!el) return;
+    const html = composerHtml(value, mentionNamesRef.current);
+    el.dataset.empty = value ? "false" : "true";
+    if (paintedHtmlRef.current === html) {
+      if (caret != null) placeCaret(el, caret);
+      return;
+    }
+    paintedHtmlRef.current = html;
+    el.innerHTML = html;
+    if (caret != null) placeCaret(el, caret);
+  }
+
+  function onDraftChange(value: string, caret = value.length) {
     setDraft(value);
-    const caret = composerRef.current?.selectionStart ?? value.length;
     const before = value.slice(0, caret);
     const match = before.match(/@([^\s@]*)$/);
     if (match) {
@@ -267,20 +344,36 @@ function MessagesPage() {
 
   function insertMention(member: TeamMember) {
     const el = composerRef.current;
-    const value = draft;
-    const caret = el?.selectionStart ?? value.length;
+    const value = el ? readComposerText(el) : draft;
+    const caret = el ? caretOffset(el) : value.length;
     const before = value.slice(0, caret);
     const after = value.slice(caret);
     const replaced = before.replace(/@([^\s@]*)$/, `@${member.name} `);
     const next = replaced + after;
-    setDraft(next);
     setMentionOpen(false);
     setMentionQuery("");
-    requestAnimationFrame(() => {
-      el?.focus();
-      const pos = replaced.length;
-      el?.setSelectionRange(pos, pos);
-    });
+    setDraft(next);
+    paintComposer(next, replaced.length);
+    el?.focus();
+  }
+
+  function handleComposerInput() {
+    const el = composerRef.current;
+    if (!el) return;
+    const caret = caretOffset(el);
+    const text = readComposerText(el);
+    paintComposer(text, caret);
+    onDraftChange(text, caret);
+  }
+
+  function insertComposerText(text: string) {
+    const el = composerRef.current;
+    if (!el) return;
+    const caret = caretOffset(el);
+    const current = readComposerText(el);
+    const next = current.slice(0, caret) + text + current.slice(caret);
+    paintComposer(next, caret + text.length);
+    onDraftChange(next, caret + text.length);
   }
 
   function handleSend() {
@@ -297,6 +390,37 @@ function MessagesPage() {
     persist(next);
     setDraft("");
     setMentionOpen(false);
+    paintComposer("", 0);
+
+    const recipients = parseMentions(body, members)
+      .map((mention) => members.find((member) => member.id === mention.memberId))
+      .filter((member): member is TeamMember => {
+        if (!member || member.id === current.id) return false;
+        const email = member.email.trim().toLowerCase();
+        return email.includes("@") && !email.endsWith("@example.com");
+      });
+    if (recipients.length === 0) return;
+
+    void sendMentionEmails({
+      data: {
+        senderName: current.name,
+        body,
+        origin: window.location.origin,
+        mentions: recipients.map((member) => ({
+          email: member.email.trim(),
+          name: member.name,
+        })),
+      },
+    }).then(
+      (result) => {
+        if (result.skipped === "not-configured") {
+          toast.message("Mention saved here. Email isn’t set up yet.");
+        }
+      },
+      () => {
+        toast.error("The message is here. The mention email could not be sent.");
+      },
+    );
   }
 
   if (!ready || !current) {
@@ -347,13 +471,43 @@ function MessagesPage() {
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search conversations"
+                  onFocus={() => {
+                    setSearchFocused(true);
+                    reloadDirectory();
+                  }}
+                  onBlur={() => setSearchFocused(false)}
+                  placeholder="Search people"
                   className="moss-card h-10 w-full rounded-full pl-9 pr-3 text-sm font-light placeholder:text-foreground/40 focus:outline-none focus:ring-1 focus:ring-black/10"
                 />
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
+              {peopleFromSearch.length > 0 ? (
+                <ul className="border-b border-black/5 p-2">
+                  {peopleFromSearch.map((member) => (
+                    <li key={member.id}>
+                      <button
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          startConversation([member]);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03]"
+                      >
+                        <ProfileAvatar name={member.name} size="sm" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-normal">{member.name}</p>
+                          <p className="truncate text-[11px] font-light text-foreground/45">
+                            {member.status === "Pending" ? "Pending · " : ""}
+                            {member.email}
+                          </p>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {filteredThreads.length === 0 ? (
                 <div className="px-4 py-10 text-center">
                   <MessageCircle className="mx-auto h-8 w-8 text-foreground/20" />
@@ -470,7 +624,9 @@ function MessagesPage() {
                     <p className="truncate text-sm font-normal">
                       {threadPartnerName(activeThread, current.id)}
                     </p>
-                    <p className="text-[11px] font-light text-foreground/45">Direct message</p>
+                    <p className="text-[11px] font-light text-foreground/45">
+                      {isGroupThread(activeThread) ? "Group" : "Direct message"}
+                    </p>
                   </div>
                 </div>
 
@@ -525,9 +681,14 @@ function MessagesPage() {
                 </div>
 
                 <div className="relative border-t border-black/5 p-4 sm:p-5">
-                  {mentionOpen && mentionOptions.length > 0 ? (
-                    <div className="moss-dialog absolute bottom-full left-4 right-4 mb-2 overflow-hidden rounded-2xl sm:left-5 sm:right-5">
-                      {mentionOptions.map((member, index) => (
+                  {mentionOpen ? (
+                    <div className="moss-dialog absolute bottom-full left-4 right-4 z-10 mb-2 overflow-hidden rounded-2xl sm:left-5 sm:right-5">
+                      {mentionOptions.length === 0 ? (
+                        <p className="px-3 py-3 text-sm font-light text-foreground/50">
+                          No teammates match that name.
+                        </p>
+                      ) : (
+                        mentionOptions.map((member, index) => (
                         <button
                           key={member.id}
                           type="button"
@@ -545,15 +706,25 @@ function MessagesPage() {
                             </p>
                           </div>
                         </button>
-                      ))}
+                        ))
+                      )}
                     </div>
                   ) : null}
 
                   <div className="flex items-end gap-2">
-                    <textarea
+                    <div
                       ref={composerRef}
-                      value={draft}
-                      onChange={(e) => onDraftChange(e.target.value)}
+                      role="textbox"
+                      aria-multiline="true"
+                      contentEditable
+                      suppressContentEditableWarning
+                      data-placeholder="Type your message"
+                      data-empty={draft ? "false" : "true"}
+                      onInput={handleComposerInput}
+                      onPaste={(event) => {
+                        event.preventDefault();
+                        insertComposerText(event.clipboardData.getData("text/plain"));
+                      }}
                       onKeyDown={(e) => {
                         if (mentionOpen && mentionOptions.length > 0) {
                           if (e.key === "ArrowDown") {
@@ -577,14 +748,17 @@ function MessagesPage() {
                             return;
                           }
                         }
+                        if (e.key === "Enter" && e.shiftKey) {
+                          e.preventDefault();
+                          insertComposerText("\n");
+                          return;
+                        }
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
                           handleSend();
                         }
                       }}
-                      rows={2}
-                      placeholder="Type your message"
-                      className="min-h-[2.75rem] flex-1 resize-none rounded-2xl border border-black/10 bg-background px-4 py-3 text-sm font-light outline-none ring-offset-background placeholder:text-foreground/35 focus-visible:ring-2 focus-visible:ring-ring"
+                      className="composer-input max-h-40 min-h-[2.75rem] min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words rounded-2xl border border-black/10 bg-transparent px-4 py-3 text-sm font-light leading-relaxed text-foreground outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
                     />
                     <Button
                       type="button"
@@ -611,14 +785,18 @@ function MessagesPage() {
         open={composeOpen}
         onOpenChange={(open) => {
           setComposeOpen(open);
-          if (!open) setPersonQuery("");
+          if (open) reloadDirectory();
+          if (!open) {
+            setPersonQuery("");
+            setSelectedPeople([]);
+          }
         }}
       >
         <DialogContent className="moss-dialog max-w-md gap-0 p-0">
           <DialogHeader className="px-5 pb-3 pt-5">
             <DialogTitle className="text-lg font-normal">New message</DialogTitle>
             <DialogDescription className="font-light">
-              Choose who you&apos;re writing to. You&apos;ll land in the conversation, ready to type.
+              Pick one person, or several to start a group.
             </DialogDescription>
           </DialogHeader>
           <div className="px-5 pb-3">
@@ -633,7 +811,7 @@ function MessagesPage() {
               />
             </div>
           </div>
-          <div className="max-h-80 overflow-y-auto px-2 pb-3">
+          <div className="max-h-80 overflow-y-auto px-2 pb-2">
             {peopleMatchingQuery.length === 0 ? (
               <p className="px-3 py-8 text-center text-sm font-light text-foreground/50">
                 {peopleToMessage.length === 0
@@ -641,24 +819,54 @@ function MessagesPage() {
                   : "No one matches that search."}
               </p>
             ) : (
-              peopleMatchingQuery.map((member) => (
-                <button
-                  key={member.id}
-                  type="button"
-                  onClick={() => startConversation(member)}
-                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-black/[0.04]"
-                >
-                  <ProfileAvatar name={member.name} size="sm" />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-normal">{member.name}</p>
-                    <p className="truncate text-[11px] font-light text-foreground/45">
-                      {member.role}
-                      {member.email ? ` · ${member.email}` : ""}
-                    </p>
-                  </div>
-                </button>
-              ))
+              peopleMatchingQuery.map((member) => {
+                const selected = selectedPeople.includes(member.id);
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => togglePerson(member.id)}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-black/[0.04]"
+                  >
+                    <ProfileAvatar name={member.name} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-normal">{member.name}</p>
+                      <p className="truncate text-[11px] font-light text-foreground/45">
+                        {member.role}
+                        {member.email ? ` · ${member.email}` : ""}
+                        {member.status === "Pending" ? " · Pending" : ""}
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        "grid h-5 w-5 shrink-0 place-items-center rounded-full border",
+                        selected
+                          ? "border-[#3AB819] bg-[#3AB819]/15 text-[#1f6b12]"
+                          : "border-black/15 text-transparent",
+                      )}
+                    >
+                      <Check className="h-3 w-3" />
+                    </span>
+                  </button>
+                );
+              })
             )}
+          </div>
+          <div className="flex justify-end border-t border-black/5 px-5 py-3">
+            <button
+              type="button"
+              disabled={selectedPeople.length === 0}
+              onClick={() =>
+                startConversation(
+                  peopleToMessage.filter((member) => selectedPeople.includes(member.id)),
+                )
+              }
+              className={WASH_BUTTON_CLASS}
+            >
+              {selectedPeople.length > 1
+                ? `Start group (${selectedPeople.length})`
+                : "Start message"}
+            </button>
           </div>
         </DialogContent>
       </Dialog>

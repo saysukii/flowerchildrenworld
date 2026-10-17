@@ -2,6 +2,7 @@ import teamInviteHtml from "@/emails/templates/team-invite.html?raw";
 import volunteerConfirmationHtml from "@/emails/templates/volunteer-confirmation.html?raw";
 import partnerConfirmationHtml from "@/emails/templates/partner-confirmation.html?raw";
 import enrollmentConfirmationHtml from "@/emails/templates/enrollment-confirmation.html?raw";
+import messageMentionHtml from "@/emails/templates/message-mention.html?raw";
 
 import {
   EMAIL_LOGO_PATH,
@@ -14,6 +15,7 @@ const TEMPLATE_HTML: Record<EmailTemplateId, string> = {
   "volunteer-confirmation": volunteerConfirmationHtml,
   "partner-confirmation": partnerConfirmationHtml,
   "enrollment-confirmation": enrollmentConfirmationHtml,
+  "message-mention": messageMentionHtml,
 };
 
 export function getAppOrigin(fallback?: string) {

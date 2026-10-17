@@ -1,7 +1,8 @@
-import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
+import { Excalidraw, MainMenu, useHandleLibrary } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
-import { FileText, Save, Trash2 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { FileText, Library, Save, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { WhiteboardColorToolbarPortal } from "@/components/garden/whiteboard-color-toolbar-portal";
 import { WhiteboardMobileToolbarPortal, hasWhiteboardSelection } from "@/components/garden/whiteboard-mobile-toolbar-portal";
 import {
@@ -23,6 +24,8 @@ import {
   type WhiteboardStrokeWidth,
 } from "@/lib/garden-whiteboard-scene";
 import type { ExcalidrawApi } from "@/lib/garden-whiteboard-types";
+import { fcwLibraryAdapter, fcwStickerFiles } from "@/lib/garden-library";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { cn } from "@/lib/utils";
 
 type ExcalidrawCanvasProps = {
@@ -45,6 +48,8 @@ export function ExcalidrawCanvas({
   isMobile = false,
 }: ExcalidrawCanvasProps) {
   const apiRef = useRef<ExcalidrawApi | null>(null);
+  const libraryApiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const [libraryApi, setLibraryApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuOpenRef = useRef(false);
   const selectionKeyRef = useRef("");
@@ -58,6 +63,71 @@ export function ExcalidrawCanvas({
     () => sanitizeWhiteboardScene(initialScene),
     [initialScene],
   );
+
+  useHandleLibrary({ excalidrawAPI: libraryApi, adapter: fcwLibraryAdapter });
+
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    const sources = ["/fcw-logo.png", "/fcw-flower.png"];
+    const paint = () => {
+      const headers = [...root.querySelectorAll(".library-menu-items-container__header")];
+      const personal = headers.find((node) => node.textContent?.includes("Personal"));
+      const grid = personal?.parentElement?.querySelector(".library-menu-items-container__grid");
+      if (grid) {
+        [...grid.querySelectorAll(".library-unit__dragger svg")].forEach((svg, index) => {
+          const src = sources[index];
+          if (!src || svg.querySelector("image")) return;
+          const image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+          image.setAttribute("href", src);
+          image.setAttribute("x", "8%");
+          image.setAttribute("y", "8%");
+          image.setAttribute("width", "84%");
+          image.setAttribute("height", "84%");
+          image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+          svg.appendChild(image);
+        });
+      }
+    };
+    const observer = new MutationObserver(paint);
+    observer.observe(root, { childList: true, subtree: true });
+    paint();
+    return () => observer.disconnect();
+  }, []);
+
+  async function saveSelectionToLibrary() {
+    const api = libraryApiRef.current;
+    if (!api) return;
+    const selected = api.getAppState().selectedElementIds;
+    const elements = api
+      .getSceneElements()
+      .filter((element) => selected[element.id] && !element.isDeleted)
+      .map((element) => ({ ...element }));
+    if (elements.length === 0) {
+      toast.message("Select something on the board, then save it to the library.");
+      return;
+    }
+    const minX = Math.min(...elements.map((element) => element.x));
+    const minY = Math.min(...elements.map((element) => element.y));
+    await api.updateLibrary({
+      libraryItems: [
+        {
+          id: crypto.randomUUID(),
+          status: "unpublished",
+          created: Date.now(),
+          name: "Saved from the board",
+          elements: elements.map((element) => ({
+            ...element,
+            x: element.x - minX,
+            y: element.y - minY,
+          })),
+        },
+      ],
+      merge: true,
+      openLibraryMenu: true,
+      defaultStatus: "unpublished",
+    });
+  }
 
   return (
     <div
@@ -137,6 +207,11 @@ export function ExcalidrawCanvas({
         initialData={initialData as never}
         excalidrawAPI={(api) => {
           apiRef.current = api;
+          libraryApiRef.current = api;
+          void fcwStickerFiles()
+            .then((files) => api.addFiles(files))
+            .catch((error) => console.error(error))
+            .finally(() => setLibraryApi((current) => current ?? api));
         }}
         UIOptions={{
           canvasActions: {
@@ -156,6 +231,14 @@ export function ExcalidrawCanvas({
             icon={<Save className="h-4 w-4" strokeWidth={1.75} />}
           >
             Save whiteboard
+          </MainMenu.Item>
+          <MainMenu.Item
+            onSelect={() => {
+              void saveSelectionToLibrary();
+            }}
+            icon={<Library className="h-4 w-4" strokeWidth={1.75} />}
+          >
+            Save to library
           </MainMenu.Item>
           <MainMenu.Item
             onSelect={() => {

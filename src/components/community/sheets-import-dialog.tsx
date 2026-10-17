@@ -24,6 +24,7 @@ import {
   fetchSpreadsheetTabs,
   fetchSpreadsheetValues,
   fetchUserSpreadsheets,
+  readGoogleAccessToken,
   type GoogleSpreadsheet,
   sheetValuesToCsv,
 } from "@/lib/google";
@@ -88,10 +89,11 @@ export function SheetsImportDialog({
 
   async function getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
-    if (error || !data.session?.provider_token) {
+    const token = readGoogleAccessToken(error ? null : data.session?.provider_token);
+    if (!token) {
       throw new Error("Google access is not enabled. Connect Google in Settings first.");
     }
-    return data.session.provider_token;
+    return token;
   }
 
   const loadTabsForSpreadsheet = useCallback(async (spreadsheetId: string) => {

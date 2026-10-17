@@ -5,7 +5,8 @@ export type EmailTemplateId =
   | "team-invite"
   | "volunteer-confirmation"
   | "partner-confirmation"
-  | "enrollment-confirmation";
+  | "enrollment-confirmation"
+  | "message-mention";
 
 export type EmailTemplateMeta = {
   id: EmailTemplateId;
@@ -51,6 +52,18 @@ export const EMAIL_TEMPLATES: EmailTemplateMeta[] = [
     sampleVars: {
       guardian_name: "Sam",
       child_name: "River",
+    },
+  },
+  {
+    id: "message-mention",
+    label: "Message mention",
+    description: "Sent when a teammate @mentions you in Messages.",
+    subject: "Sukii mentioned you",
+    sampleVars: {
+      recipient_name: "Priya",
+      sender_name: "Sukii",
+      message_body: "Garden beds are ready for Saturday — @Priya can you bring the cups?",
+      messages_url: "https://inside.flowerchildren.world/messages",
     },
   },
 ];

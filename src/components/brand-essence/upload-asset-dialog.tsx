@@ -18,7 +18,7 @@ import {
   type BrandAssetCategory,
   fileToDataUrl,
 } from "@/lib/brand-assets";
-import { downloadDriveFile, fetchDriveAssets, type GoogleDriveFile } from "@/lib/google";
+import { downloadDriveFile, fetchDriveAssets, readGoogleAccessToken, type GoogleDriveFile } from "@/lib/google";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -86,10 +86,11 @@ export function UploadAssetDialog({
 
   async function getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
-    if (error || !data.session?.provider_token) {
+    const token = readGoogleAccessToken(error ? null : data.session?.provider_token);
+    if (!token) {
       throw new Error("Google Drive access is not enabled. Connect Google in Settings first.");
     }
-    return data.session.provider_token;
+    return token;
   }
 
   async function loadDriveFiles() {

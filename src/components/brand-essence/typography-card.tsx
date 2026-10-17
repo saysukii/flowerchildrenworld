@@ -27,11 +27,18 @@ const FONTS: FontEntry[] = [
     previewClassName: `${PREVIEW_SIZE} font-light`,
   },
   {
+    name: "Excalifont",
+    usage: "Labels",
+    file: "/Excalifont-Regular.woff2",
+    downloadName: "Excalifont-Regular.woff2",
+    previewClassName: `${PREVIEW_SIZE} font-label text-foreground`,
+  },
+  {
     name: "Adigiana Toybox",
-    usage: "Labels + playful accents",
+    usage: "Brand accent",
     file: "/Adigiana-Toybox.ttf",
     downloadName: "Adigiana-Toybox.ttf",
-    previewClassName: `${PREVIEW_SIZE} font-label tracking-[0.1em] text-foreground`,
+    previewClassName: `${PREVIEW_SIZE} font-adigiana tracking-[0.1em] text-foreground`,
   },
 ];
 

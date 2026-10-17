@@ -5,11 +5,10 @@ import { PageLabel } from "@/components/page-label";
 import {
   isDevMock,
   MOCK_TEAM_MEMBERS,
-  MOCK_TODAY_EVENTS,
-  MOCK_UPCOMING_EVENTS,
   type DashboardEvent,
 } from "@/lib/dev-mock-data";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchPrimaryCalendarEvents, GoogleAccessError, readGoogleAccessToken } from "@/lib/google";
 import { loadTeamMembers } from "@/lib/team-members";
 import { getDisplayName } from "@/lib/user-role";
 import {
@@ -64,8 +63,9 @@ function DashboardPage() {
   const dayKey = WEEKDAY_KEYS[now.getDay()];
   const [rituals, setRituals] = useState<Ritual[]>(DEFAULT_RITUALS);
   const [firstName, setFirstName] = useState("");
-  const todayEvents = isDevMock ? MOCK_TODAY_EVENTS : [];
-  const upcomingEvents = isDevMock ? MOCK_UPCOMING_EVENTS : [];
+  const [calendarLinked, setCalendarLinked] = useState(false);
+  const [todayEvents, setTodayEvents] = useState<DashboardEvent[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<DashboardEvent[]>([]);
 
   useEffect(() => {
     setRituals(loadRituals());
@@ -89,6 +89,55 @@ function DashboardPage() {
 
     return () => {
       active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadCalendar() {
+      const { data } = await supabase.auth.getSession();
+      const token = readGoogleAccessToken(data.session?.provider_token);
+      if (!token) {
+        if (!active) return;
+        setCalendarLinked(false);
+        setTodayEvents([]);
+        setUpcomingEvents([]);
+        return;
+      }
+      try {
+        const events = await fetchPrimaryCalendarEvents(token);
+        if (!active) return;
+        setCalendarLinked(true);
+        setTodayEvents(events.filter((event) => event.day === "today"));
+        setUpcomingEvents(events.filter((event) => event.day === "upcoming"));
+      } catch (error) {
+        if (!active) return;
+        if (error instanceof GoogleAccessError) {
+          setCalendarLinked(false);
+          setTodayEvents([]);
+          setUpcomingEvents([]);
+          return;
+        }
+        console.error(error);
+      }
+    }
+
+    void loadCalendar();
+    const interval = window.setInterval(() => void loadCalendar(), 20_000);
+    function onVisible() {
+      if (document.visibilityState === "visible") void loadCalendar();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
+      void loadCalendar();
+    });
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
       authListener.subscription.unsubscribe();
     };
   }, []);
@@ -122,7 +171,9 @@ function DashboardPage() {
                   </ul>
                 ) : (
                   <p className="text-sm leading-relaxed text-foreground/60">
-                    Nothing scheduled today — a good day to rest or get ahead.
+                    {calendarLinked
+                      ? "Nothing scheduled today — a good day to rest or get ahead."
+                      : "Connect Google in Settings to show today’s calendar."}
                   </p>
                 )}
               </div>
@@ -155,13 +206,15 @@ function DashboardPage() {
             <h2 className="mt-2 text-xl font-normal">Upcoming programming</h2>
             {upcomingEvents.length > 0 ? (
               <ul className="mt-4 space-y-3">
-                {upcomingEvents.map((event) => (
-                  <EventRow key={`${event.title}-${event.time}`} event={event} />
-                ))}
+                    {upcomingEvents.map((event) => (
+                      <EventRow key={`${event.title}-${event.time}-${event.detail ?? ""}`} event={event} />
+                    ))}
               </ul>
             ) : (
               <p className="mt-4 text-sm leading-relaxed text-foreground/60">
-                Nothing on the calendar yet.
+                {calendarLinked
+                  ? "Nothing on the calendar yet."
+                  : "Connect Google in Settings to show the calendar."}
               </p>
             )}
           </Card>

@@ -210,24 +210,40 @@ export function findOrCreateThread(
   current: { id: string; name: string },
   other: { id: string; name: string },
 ): { store: MessagesStore; thread: MessageThread } {
-  const existing = store.threads.find((thread) => {
-    if (thread.participantIds.length !== 2) return false;
-    const set = new Set(thread.participantIds);
-    return set.has(current.id) && set.has(other.id);
-  });
+  return findOrCreateGroup(store, current, [other]);
+}
 
+/** Open the conversation with this exact set of people, or start one. */
+export function findOrCreateGroup(
+  store: MessagesStore,
+  current: { id: string; name: string },
+  others: { id: string; name: string }[],
+): { store: MessagesStore; thread: MessageThread } {
+  const uniqueOthers = others.filter(
+    (person, index, list) =>
+      person.id !== current.id && list.findIndex((item) => item.id === person.id) === index,
+  );
+  const ids = [current.id, ...uniqueOthers.map((person) => person.id)].sort();
+  const existing = store.threads.find((thread) => {
+    if (thread.participantIds.length !== ids.length) return false;
+    const sorted = [...thread.participantIds].sort();
+    return sorted.every((id, index) => id === ids[index]);
+  });
   if (existing) return { store, thread: existing };
 
   const thread: MessageThread = {
     id: crypto.randomUUID(),
-    participantIds: [current.id, other.id],
-    participantNames: [current.name, other.name],
+    participantIds: [current.id, ...uniqueOthers.map((person) => person.id)],
+    participantNames: [current.name, ...uniqueOthers.map((person) => person.name)],
     updatedAt: new Date().toISOString(),
   };
-
   const next = { ...store, threads: [thread, ...store.threads] };
   writeStore(next);
   return { store: next, thread };
+}
+
+export function isGroupThread(thread: MessageThread) {
+  return thread.participantIds.length > 2;
 }
 
 function previewText(body: string, max = 90) {
@@ -319,10 +335,13 @@ export function sendMessage(
 }
 
 export function threadPartnerName(thread: MessageThread, currentId: string) {
-  const idx = thread.participantIds.indexOf(currentId);
-  if (idx === -1) return thread.participantNames[0] ?? "Team";
-  const otherIdx = idx === 0 ? 1 : 0;
-  return thread.participantNames[otherIdx] ?? thread.participantNames[0] ?? "Team";
+  const others = thread.participantIds
+    .map((id, index) => ({ id, name: thread.participantNames[index] || "Teammate" }))
+    .filter((person) => person.id !== currentId);
+  if (others.length === 0) return thread.participantNames[0] ?? "Team";
+  if (others.length === 1) return others[0]!.name;
+  if (others.length === 2) return `${others[0]!.name}, ${others[1]!.name}`;
+  return `${others[0]!.name}, ${others[1]!.name} +${others.length - 2}`;
 }
 
 export function threadsForUser(store: MessagesStore, userId: string) {
@@ -454,6 +473,26 @@ export function mentionSegments(
       }
       return { type: "text" as const, value: part };
     });
+}
+
+/** Highlight saved mentions and the @name still being typed. */
+export function composerHighlights(
+  body: string,
+  names: string[],
+): Array<{ type: "text" | "mention"; value: string }> {
+  if (!body) return [];
+  const sorted = [...names].filter(Boolean).sort((a, b) => b.length - a.length);
+  const namePattern = sorted.map((name) => escapeRegExp(name)).join("|");
+  const pattern = namePattern
+    ? new RegExp(`(@(?:${namePattern})(?![\\w])|@[^\\s@]*$)`, "gi")
+    : /(@[^\s@]*$)/g;
+  const parts = body.split(pattern);
+  return parts
+    .filter((part) => part.length > 0)
+    .map((part) => ({
+      type: part.startsWith("@") ? ("mention" as const) : ("text" as const),
+      value: part,
+    }));
 }
 
 function escapeRegExp(value: string) {

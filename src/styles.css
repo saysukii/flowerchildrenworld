@@ -3,6 +3,24 @@
 @import "tw-animate-css";
 
 .font-label {
+  font-family: 'Excalifont', cursive;
+  font-size: 17px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  font-weight: 400;
+  -webkit-text-stroke: 0;
+  paint-order: normal;
+}
+
+.library-menu-items-container__header--excal,
+.library-menu-items-container__header--excal + div,
+.library-menu-browse-button,
+.library-menu-control-buttons--at-bottom {
+  display: none !important;
+}
+
+.font-adigiana {
   font-family: 'Adigiana Toybox', cursive;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -159,6 +177,13 @@
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  font-family: 'Excalifont';
+  src: url('/Excalifont-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 @keyframes fcw-flower-loop {
   from {
     transform: rotate(0deg);
@@ -282,7 +307,11 @@
   }
 }
 
-/* Keep scroll behavior; hide scrollbars everywhere (including portaled / third-party UI). */
+.composer-input[data-empty="true"]::before {
+  content: attr(data-placeholder);
+  color: color-mix(in srgb, var(--foreground) 35%, transparent);
+  pointer-events: none;
+}
 html,
 body,
 * {

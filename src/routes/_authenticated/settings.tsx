@@ -286,7 +286,7 @@ function SettingsPage() {
       syncGoogleIntegration(session);
       if (session?.provider_token) {
         setConnectingGoogle(false);
-        toast.success("Google Calendar & Sheets access enabled.");
+        toast.success("Google sign-in, Calendar, and Drive are connected.");
       }
     });
 
@@ -705,7 +705,7 @@ function SettingsPage() {
               <div className="space-y-6">
                 <IntegrationCard
                   title="Google"
-                  description="Calendar sync and Google Sheets import for Community."
+                  description="Sign in, Calendar, and Drive."
                   connected={integrations.google.connected}
                   accountName={integrations.google.accountName}
                   connectLabel="Connect to Google"

@@ -8,6 +8,7 @@ import {
   getEmailLogoUrl,
   isEmailConfigured,
   renderEmailTemplate,
+  sendEmail,
   sendTemplatedEmail,
 } from "@/lib/email.server";
 
@@ -16,7 +17,16 @@ const templateIdSchema = z.enum([
   "volunteer-confirmation",
   "partner-confirmation",
   "enrollment-confirmation",
+  "message-mention",
 ]);
+
+function escapeEmailText(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 export const getEmailTemplateCatalog = createServerFn({ method: "GET" }).handler(async () => {
   return {
@@ -122,4 +132,60 @@ export const sendTeamInviteEmail = createServerFn({ method: "POST" })
     });
 
     return { email };
+  });
+
+export const sendMentionEmails = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      senderName: z.string().trim().min(1).max(120),
+      body: z.string().trim().min(1).max(4000),
+      origin: z.string().url(),
+      mentions: z
+        .array(
+          z.object({
+            email: z.string().email(),
+            name: z.string().trim().min(1).max(120),
+          }),
+        )
+        .max(20),
+    }),
+  )
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context, data }) => {
+    if (!isEmailConfigured()) return { sent: 0, skipped: "not-configured" as const };
+
+    const { data: userData } = await context.supabase.auth.getUser();
+    const self = userData.user?.email?.toLowerCase() ?? "";
+    const seen = new Set<string>();
+    const recipients = data.mentions.filter((mention) => {
+      const email = mention.email.trim().toLowerCase();
+      if (!email || email === self || seen.has(email)) return false;
+      seen.add(email);
+      return true;
+    });
+
+    const appOrigin = getAppOrigin(data.origin);
+    const senderName = data.senderName.replace(/[\r\n]+/g, " ").trim();
+    let sent = 0;
+
+    for (const mention of recipients) {
+      const html = renderEmailTemplate(
+        "message-mention",
+        {
+          recipient_name: escapeEmailText(mention.name),
+          sender_name: escapeEmailText(senderName),
+          message_body: escapeEmailText(data.body).replace(/\n/g, "<br>"),
+          messages_url: `${appOrigin}/messages`,
+        },
+        data.origin,
+      );
+      await sendEmail({
+        to: mention.email.trim(),
+        subject: `${senderName} mentioned you`,
+        html,
+      });
+      sent += 1;
+    }
+
+    return { sent, skipped: null };
   });

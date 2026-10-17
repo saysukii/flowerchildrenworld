@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Calendar } from "@/components/ui/calendar";
+import { DatePickerChoices } from "@/components/community/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FILTER_INPUT_CLASS } from "@/components/community/filter-control-styles";
+import { formatUsPhone } from "@/lib/phone";
 import {
   type ChildRecord,
   type CommunityStore,
@@ -1004,13 +1005,16 @@ function ConnectedGuardianEditor({
             <input type="email" className={inputCls} value={value.email} onChange={(e) => onChange({ ...value, email: e.target.value })} />
           </Field>
           <Field label="Phone">
-            <input type="tel" className={inputCls} value={value.phone} onChange={(e) => onChange({ ...value, phone: e.target.value })} />
+            <PhoneInput value={value.phone} onChange={(phone) => onChange({ ...value, phone })} />
           </Field>
           <Field label="Emergency contact name">
             <input className={inputCls} value={value.emergencyContactName} onChange={(e) => onChange({ ...value, emergencyContactName: e.target.value })} />
           </Field>
           <Field label="Emergency contact phone">
-            <input type="tel" className={inputCls} value={value.emergencyContactPhone} onChange={(e) => onChange({ ...value, emergencyContactPhone: e.target.value })} />
+            <PhoneInput
+              value={value.emergencyContactPhone}
+              onChange={(emergencyContactPhone) => onChange({ ...value, emergencyContactPhone })}
+            />
           </Field>
           {linked.length > 0 ? (
             <p className="text-xs font-light text-foreground/50">
@@ -1081,9 +1085,47 @@ function isoToLocalDate(value: string) {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-function DateField({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+function PhoneInput({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  return (
+    <input
+      type="tel"
+      inputMode="numeric"
+      autoComplete="tel"
+      placeholder="(000) 000-0000"
+      className={inputCls}
+      value={formatUsPhone(value)}
+      onChange={(e) => onChange(formatUsPhone(e.target.value))}
+    />
+  );
+}
+
+function DateField({
+  value,
+  onChange,
+  birth = false,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  birth?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const selected = isoToLocalDate(value);
+  const now = new Date();
+  const minYear = 1920;
+  const maxYear = birth ? now.getFullYear() : now.getFullYear() + 2;
+  const fallback = birth ? new Date(now.getFullYear() - 6, now.getMonth(), 1) : new Date(now.getFullYear(), now.getMonth(), 1);
+  const [visible, setVisible] = useState(() => new Date((selected ?? fallback).getFullYear(), (selected ?? fallback).getMonth(), 1));
+
+  useEffect(() => {
+    if (!open) return;
+    const selectedDate = isoToLocalDate(value);
+    const today = new Date();
+    const fallbackDate = birth
+      ? new Date(today.getFullYear() - 6, today.getMonth(), 1)
+      : new Date(today.getFullYear(), today.getMonth(), 1);
+    const next = selectedDate ?? fallbackDate;
+    setVisible(new Date(next.getFullYear(), next.getMonth(), 1));
+  }, [open, value, birth]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -1093,17 +1135,21 @@ function DateField({ value, onChange }: { value: string; onChange: (next: string
           <CalendarDays className="h-4 w-4 shrink-0 text-foreground/45" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="moss-dialog z-[80] w-auto rounded-2xl border-black/10 p-2 shadow-none">
-        <Calendar
-          mode="single"
+      <PopoverContent
+        align="start"
+        style={{ width: "var(--radix-popover-trigger-width)" }}
+        className="moss-dialog z-[80] w-[var(--radix-popover-trigger-width)] rounded-2xl border-black/10 p-3 shadow-none"
+      >
+        <DatePickerChoices
+          visible={visible}
+          onVisibleChange={setVisible}
           selected={selected}
-          defaultMonth={selected}
-          className="bg-transparent p-1"
-          classNames={{ caption_label: "select-none text-sm font-normal" }}
-          onSelect={(date) => {
-            if (!date) return;
+          minYear={minYear}
+          maxYear={maxYear}
+          disableAfter={birth ? now : undefined}
+          onSelect={(date, commit = true) => {
             onChange(localDateToIso(date));
-            setOpen(false);
+            if (commit) setOpen(false);
           }}
         />
       </PopoverContent>
@@ -1128,7 +1174,11 @@ function ChildrenFields({
         />
       </Field>
       <Field label="Date of birth">
-        <DateField value={values.dateOfBirth} onChange={(dateOfBirth) => onChange({ ...values, dateOfBirth })} />
+        <DateField
+          birth
+          value={values.dateOfBirth}
+          onChange={(dateOfBirth) => onChange({ ...values, dateOfBirth })}
+        />
       </Field>
       <Field label="Program">
         <AppSelect value={values.program} onChange={(e) => onChange({ ...values, program: e.target.value })}>
@@ -1243,11 +1293,9 @@ function GuardianPicker({
             />
           </Field>
           <Field label="Phone">
-            <input
-              type="tel"
-              className={inputCls}
+            <PhoneInput
               value={newGuardian.phone}
-              onChange={(e) => onNewGuardianChange({ ...newGuardian, phone: e.target.value })}
+              onChange={(phone) => onNewGuardianChange({ ...newGuardian, phone })}
             />
           </Field>
         </div>
@@ -1287,12 +1335,7 @@ function GuardianFields({
         />
       </Field>
       <Field label="Phone">
-        <input
-          type="tel"
-          className={inputCls}
-          value={values.phone}
-          onChange={(e) => onChange({ ...values, phone: e.target.value })}
-        />
+        <PhoneInput value={values.phone} onChange={(phone) => onChange({ ...values, phone })} />
       </Field>
       <Field label="Emergency contact name">
         <input
@@ -1302,11 +1345,9 @@ function GuardianFields({
         />
       </Field>
       <Field label="Emergency contact phone">
-        <input
-          type="tel"
-          className={inputCls}
+        <PhoneInput
           value={values.emergencyContactPhone}
-          onChange={(e) => onChange({ ...values, emergencyContactPhone: e.target.value })}
+          onChange={(emergencyContactPhone) => onChange({ ...values, emergencyContactPhone })}
         />
       </Field>
     </>
@@ -1354,12 +1395,7 @@ function VolunteerFields({
         />
       </Field>
       <Field label="Phone">
-        <input
-          type="tel"
-          className={inputCls}
-          value={values.phone}
-          onChange={(e) => onChange({ ...values, phone: e.target.value })}
-        />
+        <PhoneInput value={values.phone} onChange={(phone) => onChange({ ...values, phone })} />
       </Field>
       <Field label="Skills / interests">
         <textarea
@@ -1437,12 +1473,7 @@ function PartnerFields({
         />
       </Field>
       <Field label="Phone">
-        <input
-          type="tel"
-          className={inputCls}
-          value={values.phone}
-          onChange={(e) => onChange({ ...values, phone: e.target.value })}
-        />
+        <PhoneInput value={values.phone} onChange={(phone) => onChange({ ...values, phone })} />
       </Field>
       <Field label="Partnership type">
         <AppSelect
