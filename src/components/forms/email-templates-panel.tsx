@@ -88,8 +88,7 @@ export function EmailTemplatesPanel() {
           <span className="font-label text-[11px] text-foreground/50">Email templates</span>
           <h2 className="mt-2 text-xl font-normal">Confirmation + invite emails</h2>
           <p className="mt-2 max-w-2xl text-sm font-light text-foreground/60">
-            Branded emails use the black logo from Brand Essence. Preview each template here, then
-            send a test to your inbox before going live.
+            Preview each email, then send yourself a test.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-black/10 px-3 py-1.5 text-xs text-foreground/60">

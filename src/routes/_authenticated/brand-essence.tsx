@@ -11,6 +11,7 @@ import { TypographyCard } from "@/components/brand-essence/typography-card";
 import { supabase } from "@/integrations/supabase/client";
 import { isAdmin } from "@/lib/user-role";
 import {
+  appendBrandAsset,
   filterBrandAssets,
   loadBrandAssets,
   removeBrandAsset,
@@ -60,7 +61,39 @@ function BrandEssencePage() {
   const showMission = tab === "all";
 
   useEffect(() => {
-    void loadBrandAssets().then(setAssets);
+    void loadBrandAssets().then(async (local) => {
+      setAssets(local);
+      try {
+        const { downloadWorkspaceBrandFile, listWorkspaceBrandFiles } = await import("@/lib/api/google.functions");
+        const remote = await listWorkspaceBrandFiles();
+        let changed = false;
+        for (const file of remote) {
+          if (local.some((asset) => asset.driveFileId === file.id)) continue;
+          const downloaded = await downloadWorkspaceBrandFile({ data: { fileId: file.id } });
+          if (!downloaded) continue;
+          const category = (["logos", "templates", "copy", "documents", "colors", "typography"] as const).includes(
+            file.category as BrandAssetCategory,
+          )
+            ? (file.category as BrandAssetCategory)
+            : "documents";
+          await appendBrandAsset({
+            id: crypto.randomUUID(),
+            name: downloaded.name,
+            category,
+            source: "drive",
+            mimeType: downloaded.mimeType,
+            addedAt: file.modifiedTime || new Date().toISOString(),
+            dataUrl: downloaded.dataUrl,
+            driveFileId: file.id,
+            webViewLink: file.webViewLink,
+          });
+          changed = true;
+        }
+        if (changed) setAssets(await loadBrandAssets());
+      } catch {
+        // Drive is optional until info@flowerchildren.world is connected.
+      }
+    });
     void supabase.auth.getUser().then(({ data }) => setAdmin(isAdmin(data.user)));
   }, []);
 
@@ -87,7 +120,7 @@ function BrandEssencePage() {
             <PageLabel>Brand Essence</PageLabel>
             <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Everything that makes us, us.</h1>
             <p className="mt-2 text-sm text-foreground/60">
-              Logos, colors, typography, templates, copy, and core documents — one source of truth.
+              These are the files we use.
             </p>
           </header>
         </Reveal>
@@ -121,9 +154,7 @@ function BrandEssencePage() {
               assets={vaultAssets}
               admin={admin}
               emptyLabel={
-                admin
-                  ? `Nothing here yet — upload your first ${active.key === "all" ? "file" : active.label.toLowerCase()}.`
-                  : `No ${active.key === "all" ? "files" : active.label.toLowerCase()} yet.`
+                admin ? "Nothing here yet. Upload the first file." : "Nothing here yet."
               }
               onUpload={openVaultUpload}
               onDelete={handleDelete}

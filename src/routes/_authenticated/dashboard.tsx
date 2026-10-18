@@ -5,10 +5,14 @@ import { PageLabel } from "@/components/page-label";
 import {
   isDevMock,
   MOCK_TEAM_MEMBERS,
-  type DashboardEvent,
 } from "@/lib/dev-mock-data";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchPrimaryCalendarEvents, GoogleAccessError, readGoogleAccessToken } from "@/lib/google";
+import {
+  ensureGoogleAccessToken,
+  fetchPrimaryCalendarEvents,
+  GoogleAccessError,
+  type GoogleCalendarListing,
+} from "@/lib/google";
 import { loadTeamMembers } from "@/lib/team-members";
 import { getDisplayName } from "@/lib/user-role";
 import {
@@ -33,8 +37,9 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 const WEEKDAY_KEYS: DayKey[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
 function firstNameOf(name: string) {
-  const first = name.trim().split(/\s+/)[0];
-  return first || "";
+  const first = name.trim().split(/\s+/)[0] ?? "";
+  if (!first) return "";
+  return first.charAt(0).toLocaleUpperCase() + first.slice(1);
 }
 
 function nameForSignedInUser(email: string, authName: string) {
@@ -64,8 +69,8 @@ function DashboardPage() {
   const [rituals, setRituals] = useState<Ritual[]>(DEFAULT_RITUALS);
   const [firstName, setFirstName] = useState("");
   const [calendarLinked, setCalendarLinked] = useState(false);
-  const [todayEvents, setTodayEvents] = useState<DashboardEvent[]>([]);
-  const [upcomingEvents, setUpcomingEvents] = useState<DashboardEvent[]>([]);
+  const [todayEvents, setTodayEvents] = useState<GoogleCalendarListing[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<GoogleCalendarListing[]>([]);
 
   useEffect(() => {
     setRituals(loadRituals());
@@ -98,7 +103,7 @@ function DashboardPage() {
 
     async function loadCalendar() {
       const { data } = await supabase.auth.getSession();
-      const token = readGoogleAccessToken(data.session?.provider_token);
+      const token = await ensureGoogleAccessToken(data.session);
       if (!token) {
         if (!active) return;
         setCalendarLinked(false);
@@ -164,15 +169,11 @@ function DashboardPage() {
               <h2 className="mt-2 shrink-0 text-xl font-normal">What&apos;s happening</h2>
               <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
                 {todayEvents.length > 0 ? (
-                  <ul className="space-y-3">
-                    {todayEvents.map((event) => (
-                      <EventRow key={`${event.title}-${event.time}`} event={event} />
-                    ))}
-                  </ul>
+                  <AgendaList events={todayEvents} />
                 ) : (
                   <p className="text-sm leading-relaxed text-foreground/60">
                     {calendarLinked
-                      ? "Nothing scheduled today — a good day to rest or get ahead."
+                      ? "Nothing scheduled today."
                       : "Connect Google in Settings to show today’s calendar."}
                   </p>
                 )}
@@ -205,15 +206,13 @@ function DashboardPage() {
             <Label>This Week</Label>
             <h2 className="mt-2 text-xl font-normal">Upcoming programming</h2>
             {upcomingEvents.length > 0 ? (
-              <ul className="mt-4 space-y-3">
-                    {upcomingEvents.map((event) => (
-                      <EventRow key={`${event.title}-${event.time}-${event.detail ?? ""}`} event={event} />
-                    ))}
-              </ul>
+              <div className="mt-4">
+                <DaysList events={upcomingEvents} />
+              </div>
             ) : (
               <p className="mt-4 text-sm leading-relaxed text-foreground/60">
                 {calendarLinked
-                  ? "Nothing on the calendar yet."
+                  ? "Nothing on the calendar this week."
                   : "Connect Google in Settings to show the calendar."}
               </p>
             )}
@@ -235,12 +234,64 @@ function Label({ children }: { children: React.ReactNode }) {
   return <PageLabel>{children}</PageLabel>;
 }
 
-function EventRow({ event }: { event: DashboardEvent }) {
+function dayGroups(events: GoogleCalendarListing[]) {
+  const groups: { key: string; dayNum: string; weekday: string; events: GoogleCalendarListing[] }[] = [];
+  for (const event of events) {
+    const date = new Date(event.startsAt);
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    let group = groups.find((item) => item.key === key);
+    if (!group) {
+      group = {
+        key,
+        dayNum: String(date.getDate()),
+        weekday: date.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase(),
+        events: [],
+      };
+      groups.push(group);
+    }
+    group.events.push(event);
+  }
+  return groups;
+}
+
+function AgendaList({ events }: { events: GoogleCalendarListing[] }) {
   return (
-    <li className="text-sm leading-relaxed">
-      <span className="font-normal">{event.title}</span>
-      <span className="text-foreground/50"> · {event.time}</span>
-      {event.detail ? <p className="mt-0.5 text-foreground/60">{event.detail}</p> : null}
-    </li>
+    <ul className="space-y-3">
+      {events.map((event) => (
+        <li key={event.id} className="flex gap-4">
+          <p className="w-[4.5rem] shrink-0 text-sm tabular-nums text-foreground/55">{event.time}</p>
+          <div className="min-w-0 border-l border-black/10 pl-4">
+            <p className="text-sm font-normal">{event.title}</p>
+            {event.detail ? <p className="mt-0.5 text-sm text-foreground/55">{event.detail}</p> : null}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DaysList({ events }: { events: GoogleCalendarListing[] }) {
+  return (
+    <div className="space-y-5">
+      {dayGroups(events).map((group) => (
+        <div key={group.key} className="flex gap-4">
+          <div className="w-10 shrink-0">
+            <p className="text-lg font-normal leading-none tabular-nums">{group.dayNum}</p>
+            <p className="mt-1 text-[11px] text-foreground/45">{group.weekday}</p>
+          </div>
+          <ul className="min-w-0 flex-1 space-y-3">
+            {group.events.map((event) => (
+              <li key={event.id} className="flex gap-4">
+                <p className="w-[4.5rem] shrink-0 text-sm tabular-nums text-foreground/55">{event.time}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-normal">{event.title}</p>
+                  {event.detail ? <p className="mt-0.5 text-sm text-foreground/55">{event.detail}</p> : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }

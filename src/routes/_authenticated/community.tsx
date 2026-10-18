@@ -51,6 +51,7 @@ import {
   todayAddedAt,
   toDateInputValue,
   saveChildWithGuardian,
+  refreshCommunityFromDrive,
   saveCommunityStore,
   saveEditedChild,
   updateGuardianRecord,
@@ -244,6 +245,9 @@ function CommunityPage() {
     setStore(loadCommunityStore());
     setDefaultSpreadsheetId(loadIntegrations().google.spreadsheetId ?? "");
     setReady(true);
+    void refreshCommunityFromDrive().then((merged) => {
+      if (merged) setStore(merged);
+    });
 
     void supabase.auth.getSession().then(({ data }) => {
       setAdmin(isAdmin(data.session?.user));
@@ -381,7 +385,7 @@ function CommunityPage() {
               <PageLabel>Community</PageLabel>
               <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">The village directory</h1>
               <p className="mt-2 text-sm text-foreground/60">
-                Children, guardians, volunteers, and partners — one tidy home.
+                Add children, guardians, volunteers, and partners here.
               </p>
             </div>
             {admin ? (

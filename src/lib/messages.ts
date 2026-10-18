@@ -1,4 +1,5 @@
 import { isDevMock, MOCK_MESSAGES, MOCK_MESSAGE_THREADS } from "@/lib/dev-mock-data";
+import { supabase } from "@/integrations/supabase/client";
 import type { TeamMember } from "@/lib/team-members";
 
 export type MessageMention = {
@@ -20,12 +21,14 @@ export type MessageThread = {
   id: string;
   participantIds: string[];
   participantNames: string[];
+  participantEmails?: string[];
   updatedAt: string;
 };
 
 export type MessageNotification = {
   id: string;
   recipientId: string;
+  recipientEmail?: string;
   threadId: string;
   messageId: string;
   kind: "message" | "mention";
@@ -142,9 +145,10 @@ function readStore(): MessagesStore {
   }
 }
 
-function writeStore(store: MessagesStore) {
+function writeStore(store: MessagesStore, syncRemote = true) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   notifyMessagesChanged();
+  if (syncRemote) void pushDirectedMessages(store);
 }
 
 export function notifyMessagesChanged() {
@@ -207,8 +211,8 @@ export function parseMentions(body: string, members: TeamMember[]): MessageMenti
 
 export function findOrCreateThread(
   store: MessagesStore,
-  current: { id: string; name: string },
-  other: { id: string; name: string },
+  current: { id: string; name: string; email: string },
+  other: { id: string; name: string; email: string },
 ): { store: MessagesStore; thread: MessageThread } {
   return findOrCreateGroup(store, current, [other]);
 }
@@ -216,15 +220,23 @@ export function findOrCreateThread(
 /** Open the conversation with this exact set of people, or start one. */
 export function findOrCreateGroup(
   store: MessagesStore,
-  current: { id: string; name: string },
-  others: { id: string; name: string }[],
+  current: { id: string; name: string; email: string },
+  others: { id: string; name: string; email: string }[],
 ): { store: MessagesStore; thread: MessageThread } {
   const uniqueOthers = others.filter(
     (person, index, list) =>
       person.id !== current.id && list.findIndex((item) => item.id === person.id) === index,
   );
   const ids = [current.id, ...uniqueOthers.map((person) => person.id)].sort();
+  const emails = [current.email, ...uniqueOthers.map((person) => person.email)].map((email) =>
+    email.trim().toLowerCase(),
+  );
   const existing = store.threads.find((thread) => {
+    const threadEmails = (thread.participantEmails ?? []).map((email) => email.toLowerCase()).sort();
+    const wanted = [...emails].sort();
+    if (threadEmails.length > 0 && threadEmails.length === wanted.length) {
+      return threadEmails.every((email, index) => email === wanted[index]);
+    }
     if (thread.participantIds.length !== ids.length) return false;
     const sorted = [...thread.participantIds].sort();
     return sorted.every((id, index) => id === ids[index]);
@@ -235,6 +247,7 @@ export function findOrCreateGroup(
     id: crypto.randomUUID(),
     participantIds: [current.id, ...uniqueOthers.map((person) => person.id)],
     participantNames: [current.name, ...uniqueOthers.map((person) => person.name)],
+    participantEmails: emails,
     updatedAt: new Date().toISOString(),
   };
   const next = { ...store, threads: [thread, ...store.threads] };
@@ -251,9 +264,18 @@ function previewText(body: string, max = 90) {
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
 }
 
+function emailForMember(members: TeamMember[], memberId: string, thread: MessageThread) {
+  const fromDirectory = members.find((member) => member.id === memberId)?.email;
+  if (fromDirectory) return fromDirectory.trim().toLowerCase();
+  const index = thread.participantIds.indexOf(memberId);
+  const fromThread = index >= 0 ? thread.participantEmails?.[index] : undefined;
+  return fromThread?.trim().toLowerCase();
+}
+
 function notificationsForMessage(
   message: TeamMessage,
   thread: MessageThread,
+  members: TeamMember[] = [],
 ): MessageNotification[] {
   const mentionIds = new Set(message.mentions.map((m) => m.memberId));
   const items: MessageNotification[] = [];
@@ -263,6 +285,7 @@ function notificationsForMessage(
     items.push({
       id: crypto.randomUUID(),
       recipientId: mention.memberId,
+      recipientEmail: emailForMember(members, mention.memberId, thread),
       threadId: message.threadId,
       messageId: message.id,
       kind: "mention",
@@ -278,6 +301,7 @@ function notificationsForMessage(
     items.push({
       id: crypto.randomUUID(),
       recipientId: participantId,
+      recipientEmail: emailForMember(members, participantId, thread),
       threadId: message.threadId,
       messageId: message.id,
       kind: "message",
@@ -326,7 +350,7 @@ export function sendMessage(
     threads: [...threads].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     messages: [...store.messages, message],
     notifications: [
-      ...notificationsForMessage(message, thread),
+      ...notificationsForMessage(message, thread, input.members),
       ...store.notifications,
     ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   };
@@ -344,9 +368,16 @@ export function threadPartnerName(thread: MessageThread, currentId: string) {
   return `${others[0]!.name}, ${others[1]!.name} +${others.length - 2}`;
 }
 
-export function threadsForUser(store: MessagesStore, userId: string) {
+export function threadIncludesUser(thread: MessageThread, userId: string, email?: string) {
+  if (thread.participantIds.includes(userId)) return true;
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) return false;
+  return (thread.participantEmails ?? []).some((item) => item.toLowerCase() === normalized);
+}
+
+export function threadsForUser(store: MessagesStore, userId: string, email?: string) {
   return store.threads
-    .filter((thread) => thread.participantIds.includes(userId))
+    .filter((thread) => threadIncludesUser(thread, userId, email))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
@@ -371,21 +402,27 @@ export function unreadCountForThread(store: MessagesStore, userId: string, threa
   }).length;
 }
 
-export function totalUnreadMessageCount(store: MessagesStore, userId: string) {
-  return threadsForUser(store, userId).reduce(
+export function totalUnreadMessageCount(store: MessagesStore, userId: string, email?: string) {
+  return threadsForUser(store, userId, email).reduce(
     (sum, thread) => sum + unreadCountForThread(store, userId, thread.id),
     0,
   );
 }
 
-export function notificationsForUser(store: MessagesStore, userId: string) {
+export function notificationForUser(notification: MessageNotification, userId: string, email?: string) {
+  if (notification.recipientId === userId) return true;
+  const normalized = email?.trim().toLowerCase();
+  return Boolean(normalized && notification.recipientEmail?.toLowerCase() === normalized);
+}
+
+export function notificationsForUser(store: MessagesStore, userId: string, email?: string) {
   return store.notifications
-    .filter((n) => n.recipientId === userId)
+    .filter((notification) => notificationForUser(notification, userId, email))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export function unreadNotificationCount(store: MessagesStore, userId: string) {
-  return notificationsForUser(store, userId).filter((n) => !n.read).length;
+export function unreadNotificationCount(store: MessagesStore, userId: string, email?: string) {
+  return notificationsForUser(store, userId, email).filter((n) => !n.read).length;
 }
 
 export function markThreadRead(
@@ -497,6 +534,118 @@ export function composerHighlights(
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function senderEmailFor(message: TeamMessage, thread: MessageThread | undefined) {
+  if (!thread) return "";
+  const index = thread.participantIds.indexOf(message.senderId);
+  return thread.participantEmails?.[index]?.trim().toLowerCase() ?? "";
+}
+
+async function pushDirectedMessages(store: MessagesStore) {
+  const { data } = await supabase.auth.getSession();
+  const email = data.session?.user.email?.trim().toLowerCase();
+  if (!email) return;
+
+  const threads = store.threads.filter((thread) =>
+    (thread.participantEmails ?? []).some((item) => item.toLowerCase() === email),
+  );
+  if (threads.length === 0) return;
+
+  const { error: threadError } = await supabase.from("message_threads").upsert(
+    threads.map((thread) => ({
+      id: thread.id,
+      participant_emails: (thread.participantEmails ?? []).map((item) => item.toLowerCase()),
+      participant_names: thread.participantNames,
+      updated_at: thread.updatedAt,
+    })),
+  );
+  if (threadError) return;
+
+  const threadIds = new Set(threads.map((thread) => thread.id));
+  const messages = store.messages.flatMap((message) => {
+    if (!threadIds.has(message.threadId)) return [];
+    const thread = threads.find((item) => item.id === message.threadId);
+    const senderEmail = senderEmailFor(message, thread);
+    if (!senderEmail) return [];
+    return [
+      {
+        id: message.id,
+        thread_id: message.threadId,
+        sender_email: senderEmail,
+        sender_name: message.senderName,
+        body: message.body,
+        mentions: message.mentions as unknown as import("@/integrations/supabase/types").Json,
+        created_at: message.createdAt,
+      },
+    ];
+  });
+  if (messages.length === 0) return;
+  await supabase.from("direct_messages").upsert(messages);
+}
+
+/** Load messages this signed-in person is part of, from the shared store. */
+export async function pullDirectedMessages(
+  current: { id: string; email: string },
+  members: TeamMember[],
+): Promise<MessagesStore | null> {
+  const email = current.email.trim().toLowerCase();
+  if (!email) return null;
+
+  const { data: threadRows, error } = await supabase
+    .from("message_threads")
+    .select("id, participant_emails, participant_names, updated_at");
+  if (error || !threadRows) return null;
+
+  const { data: messageRows, error: messageError } = await supabase
+    .from("direct_messages")
+    .select("id, thread_id, sender_email, sender_name, body, mentions, created_at");
+  if (messageError || !messageRows) return null;
+
+  const local = readStore();
+  const serverThreadIds = new Set(threadRows.map((row) => row.id));
+  const remappedThreads: MessageThread[] = threadRows.map((row) => {
+    const emails = row.participant_emails.map((item) => item.toLowerCase());
+    const participantIds = emails.map((item) => {
+      if (item === email) return current.id;
+      return members.find((member) => member.email.toLowerCase() === item)?.id ?? item;
+    });
+    return {
+      id: row.id,
+      participantIds,
+      participantNames: row.participant_names,
+      participantEmails: emails,
+      updatedAt: row.updated_at,
+    };
+  });
+
+  const remappedMessages: TeamMessage[] = messageRows.map((row) => {
+    const thread = remappedThreads.find((item) => item.id === row.thread_id);
+    const senderIndex = thread?.participantEmails?.indexOf(row.sender_email.toLowerCase()) ?? -1;
+    const mentions = Array.isArray(row.mentions) ? (row.mentions as MessageMention[]) : [];
+    return {
+      id: row.id,
+      threadId: row.thread_id,
+      senderId: senderIndex >= 0 ? thread!.participantIds[senderIndex]! : row.sender_email,
+      senderName: row.sender_name,
+      body: row.body,
+      mentions,
+      createdAt: row.created_at,
+    };
+  });
+
+  const next: MessagesStore = {
+    ...local,
+    threads: [...remappedThreads, ...local.threads.filter((thread) => !serverThreadIds.has(thread.id))].sort(
+      (a, b) => b.updatedAt.localeCompare(a.updatedAt),
+    ),
+    messages: [
+      ...remappedMessages,
+      ...local.messages.filter((message) => !serverThreadIds.has(message.threadId)),
+    ],
+  };
+  writeStore(next, false);
+  return next;
 }
 
 export function formatMessageTime(iso: string) {

@@ -18,7 +18,7 @@ import {
   type BrandAssetCategory,
   fileToDataUrl,
 } from "@/lib/brand-assets";
-import { downloadDriveFile, fetchDriveAssets, readGoogleAccessToken, type GoogleDriveFile } from "@/lib/google";
+import { downloadDriveFile, ensureGoogleAccessToken, fetchDriveAssets, type GoogleDriveFile } from "@/lib/google";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -86,7 +86,7 @@ export function UploadAssetDialog({
 
   async function getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
-    const token = readGoogleAccessToken(error ? null : data.session?.provider_token);
+    const token = await ensureGoogleAccessToken(error ? null : data.session);
     if (!token) {
       throw new Error("Google Drive access is not enabled. Connect Google in Settings first.");
     }
@@ -122,7 +122,27 @@ export function UploadAssetDialog({
       ...partial,
     };
     await appendBrandAsset(asset);
-    onUploaded(asset);
+    let saved = asset;
+    try {
+      const { uploadWorkspaceBrandFile } = await import("@/lib/api/google.functions");
+      const mirrored = await uploadWorkspaceBrandFile({
+        data: {
+          name: asset.name,
+          mimeType: asset.mimeType,
+          dataUrl: asset.dataUrl,
+          category: asset.category,
+          assetId: asset.id,
+        },
+      });
+      if (mirrored?.id) {
+        saved = { ...asset, source: "drive", driveFileId: mirrored.id, webViewLink: mirrored.webViewLink };
+        const { replaceBrandAsset } = await import("@/lib/brand-assets");
+        await replaceBrandAsset(saved);
+      }
+    } catch {
+      // The file stays in this browser if Drive is not connected yet.
+    }
+    onUploaded(saved);
     toast.success(`Added ${asset.name}.`);
     onOpenChange(false);
     reset();

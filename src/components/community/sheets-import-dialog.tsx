@@ -28,7 +28,7 @@ import {
   fetchSpreadsheetTabs,
   fetchSpreadsheetValues,
   fetchUserSpreadsheets,
-  readGoogleAccessToken,
+  ensureGoogleAccessToken,
   type GoogleSpreadsheet,
   sheetValuesToCsv,
 } from "@/lib/google";
@@ -145,7 +145,7 @@ export function SheetsImportDialog({
 
   async function getAccessToken() {
     const { data, error } = await supabase.auth.getSession();
-    const token = readGoogleAccessToken(error ? null : data.session?.provider_token);
+    const token = await ensureGoogleAccessToken(error ? null : data.session);
     if (!token) {
       throw new Error("Google access is not enabled. Connect Google in Settings first.");
     }
@@ -298,8 +298,7 @@ export function SheetsImportDialog({
 
         <div className="space-y-4 py-1">
           <p className="text-sm text-foreground/60 leading-relaxed">
-            Pick a spreadsheet from your Google account. Column headers should match the portal
-            fields — same as CSV import.
+            Choose a sheet. Headers need to match the directory columns.
           </p>
 
           <div className="space-y-2">

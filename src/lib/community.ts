@@ -173,10 +173,53 @@ function isCommunityStoreEmpty(store: CommunityStore) {
   );
 }
 
-export function saveCommunityStore(store: CommunityStore) {
+function writeCommunityLocal(store: CommunityStore) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(COMMUNITY_UPDATED_EVENT));
+  }
+}
+
+function mergeById<T extends { id: string }>(local: T[], remote: T[]) {
+  const map = new Map(local.map((item) => [item.id, item]));
+  for (const item of remote) {
+    map.set(item.id, { ...map.get(item.id), ...item });
+  }
+  return [...map.values()];
+}
+
+export function saveCommunityStore(store: CommunityStore) {
+  writeCommunityLocal(store);
+  if (typeof window === "undefined") return;
+  void import("@/lib/api/google.functions")
+    .then(({ pushCommunityDirectory }) => pushCommunityDirectory({ data: { store } }))
+    .catch(() => undefined);
+}
+
+export async function refreshCommunityFromDrive() {
+  if (typeof window === "undefined") return null;
+  try {
+    const { pullCommunityDirectory } = await import("@/lib/api/google.functions");
+    const remote = await pullCommunityDirectory();
+    if (!remote) return null;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const remoteEmpty =
+      (remote.children?.length ?? 0) === 0 &&
+      (remote.guardians?.length ?? 0) === 0 &&
+      (remote.volunteers?.length ?? 0) === 0 &&
+      (remote.partners?.length ?? 0) === 0;
+    if (!raw && remoteEmpty) return null;
+    const local = raw ? (JSON.parse(raw) as CommunityStore) : EMPTY_STORE;
+    const merged: CommunityStore = {
+      children: mergeById(local.children ?? [], (remote.children ?? []) as ChildRecord[]),
+      guardians: mergeById(local.guardians ?? [], (remote.guardians ?? []) as GuardianRecord[]),
+      volunteers: mergeById(local.volunteers ?? [], (remote.volunteers ?? []) as VolunteerRecord[]),
+      partners: mergeById(local.partners ?? [], (remote.partners ?? []) as PartnerRecord[]),
+    };
+    writeCommunityLocal(merged);
+    return merged;
+  } catch {
+    return null;
   }
 }
 

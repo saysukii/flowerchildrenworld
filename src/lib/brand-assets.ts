@@ -123,6 +123,15 @@ export async function loadBrandAssets(): Promise<BrandAsset[]> {
   return legacy;
 }
 
+export async function replaceBrandAsset(asset: BrandAsset) {
+  const db = await openAssetDb();
+  const assets = await readAllAssets(db);
+  const next = assets.some((item) => item.id === asset.id)
+    ? assets.map((item) => (item.id === asset.id ? asset : item))
+    : [asset, ...assets];
+  await writeAllAssets(db, next);
+}
+
 export async function appendBrandAsset(asset: BrandAsset) {
   const db = await openAssetDb();
   const assets = await readAllAssets(db);

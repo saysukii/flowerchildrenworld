@@ -129,7 +129,7 @@ function RoutinePulsePage() {
             <span className="font-label text-[11px] text-foreground/50">Routine Pulse</span>
             <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Your weekly rituals</h1>
             <p className="mt-2 text-sm text-foreground/60">
-              Day-of-week reminders that show up on your dashboard every morning.
+              Set the tone you want under today.
             </p>
           </div>
           <Button

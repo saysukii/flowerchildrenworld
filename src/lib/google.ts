@@ -1,5 +1,6 @@
 import type { Session, User } from "@supabase/supabase-js";
 import type { OAuthIntegration } from "@/lib/integrations-config";
+import { refreshGoogleAccess } from "@/lib/api/google.functions";
 
 /** Sign-in, Calendar, and Drive — the Google features Inside uses. */
 export const GOOGLE_INTEGRATION_SCOPES = [
@@ -44,9 +45,10 @@ export function googleAccountLabel(user: User | null | undefined, session: Sessi
 export function googleIntegrationFromSession(session: Session | null): OAuthIntegration & {
   hasApiAccess: boolean;
 } {
+  rememberGoogleSession(session);
   const user = session?.user ?? null;
-  const token = readGoogleAccessToken(session?.provider_token);
-  const hasApiAccess = Boolean(token);
+  const token = readGoogleAccessToken();
+  const hasApiAccess = Boolean(token || readGoogleRefreshToken());
   const connected = hasApiAccess;
 
   return {
@@ -58,34 +60,165 @@ export function googleIntegrationFromSession(session: Session | null): OAuthInte
 
 const GOOGLE_TOKEN_KEY = "fcw-google-access-token";
 const GOOGLE_TOKEN_EXPIRY_KEY = "fcw-google-access-expires";
+const GOOGLE_REFRESH_KEY = "fcw-google-refresh-token";
 const GOOGLE_TOKEN_TTL_MS = 50 * 60 * 1000;
 
-export function rememberGoogleAccessToken(token: string | null | undefined) {
-  if (typeof sessionStorage === "undefined" || !token) return;
-  sessionStorage.setItem(GOOGLE_TOKEN_KEY, token);
-  sessionStorage.setItem(GOOGLE_TOKEN_EXPIRY_KEY, String(Date.now() + GOOGLE_TOKEN_TTL_MS));
+function browserStore() {
+  return typeof localStorage === "undefined" ? null : localStorage;
 }
 
-export function clearGoogleAccessToken() {
-  if (typeof sessionStorage === "undefined") return;
+function migrateSessionToken() {
+  const store = browserStore();
+  if (!store || typeof sessionStorage === "undefined") return;
+  const legacy = sessionStorage.getItem(GOOGLE_TOKEN_KEY);
+  const legacyExpiry = sessionStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY);
+  if (legacy && !store.getItem(GOOGLE_TOKEN_KEY)) {
+    store.setItem(GOOGLE_TOKEN_KEY, legacy);
+    if (legacyExpiry) store.setItem(GOOGLE_TOKEN_EXPIRY_KEY, legacyExpiry);
+  }
   sessionStorage.removeItem(GOOGLE_TOKEN_KEY);
   sessionStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
 }
 
-/** A Google identity alone is not enough. Calendar and Sheets need the access token from Connect. */
+function adoptProviderTokensFromAuthStorage() {
+  const store = browserStore();
+  if (!store || store.getItem(GOOGLE_REFRESH_KEY)) return;
+  for (let index = 0; index < store.length; index += 1) {
+    const key = store.key(index);
+    if (!key?.includes("auth-token")) continue;
+    try {
+      const parsed = JSON.parse(store.getItem(key) || "") as {
+        provider_token?: string;
+        provider_refresh_token?: string;
+        currentSession?: { provider_token?: string; provider_refresh_token?: string };
+      };
+      const session = parsed.currentSession ?? parsed;
+      if (session.provider_refresh_token) store.setItem(GOOGLE_REFRESH_KEY, session.provider_refresh_token);
+      if (session.provider_token && !store.getItem(GOOGLE_TOKEN_KEY)) {
+        store.setItem(GOOGLE_TOKEN_KEY, session.provider_token);
+        store.setItem(GOOGLE_TOKEN_EXPIRY_KEY, String(Date.now() + GOOGLE_TOKEN_TTL_MS));
+      }
+    } catch {
+      // The auth blob is not ours to repair.
+    }
+  }
+}
+
+export function rememberGoogleAccessToken(token: string | null | undefined, expiresInSeconds?: number) {
+  const store = browserStore();
+  if (!store || !token) return;
+  const ttl = expiresInSeconds ? Math.max(expiresInSeconds - 120, 30) * 1000 : GOOGLE_TOKEN_TTL_MS;
+  store.setItem(GOOGLE_TOKEN_KEY, token);
+  store.setItem(GOOGLE_TOKEN_EXPIRY_KEY, String(Date.now() + ttl));
+}
+
+export function rememberGoogleRefreshToken(token: string | null | undefined) {
+  const store = browserStore();
+  if (!store || !token) return;
+  store.setItem(GOOGLE_REFRESH_KEY, token);
+  refreshUnavailable = false;
+}
+
+export function readGoogleRefreshToken() {
+  migrateSessionToken();
+  adoptProviderTokensFromAuthStorage();
+  return browserStore()?.getItem(GOOGLE_REFRESH_KEY) || null;
+}
+
+let adoptedProviderToken: string | null = null;
+
+export function rememberGoogleSession(session: Session | null | undefined) {
+  if (!session) return;
+  if (session.provider_refresh_token) rememberGoogleRefreshToken(session.provider_refresh_token);
+  const providerToken = session.provider_token;
+  if (!providerToken || providerToken === adoptedProviderToken) return;
+  adoptedProviderToken = providerToken;
+  rememberGoogleAccessToken(providerToken);
+}
+
+export function clearGoogleAccessToken() {
+  const store = browserStore();
+  store?.removeItem(GOOGLE_TOKEN_KEY);
+  store?.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
+  store?.removeItem(GOOGLE_REFRESH_KEY);
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.removeItem(GOOGLE_TOKEN_KEY);
+    sessionStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
+  }
+}
+
+function forgetGoogleAccessToken() {
+  const store = browserStore();
+  store?.removeItem(GOOGLE_TOKEN_KEY);
+  store?.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
+}
+
+/** A Google identity alone is not enough. Calendar and Drive need the access token from Connect. */
 export function readGoogleAccessToken(freshToken?: string | null) {
+  migrateSessionToken();
   if (freshToken) {
     rememberGoogleAccessToken(freshToken);
     return freshToken;
   }
-  if (typeof sessionStorage === "undefined") return null;
-  const expires = Number(sessionStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY) || 0);
-  const stored = sessionStorage.getItem(GOOGLE_TOKEN_KEY);
+  const store = browserStore();
+  if (!store) return null;
+  const expires = Number(store.getItem(GOOGLE_TOKEN_EXPIRY_KEY) || 0);
+  const stored = store.getItem(GOOGLE_TOKEN_KEY);
   if (!stored || !expires || Date.now() > expires) {
-    clearGoogleAccessToken();
+    forgetGoogleAccessToken();
     return null;
   }
   return stored;
+}
+
+let refreshInFlight: Promise<string | null> | null = null;
+let refreshUnavailable = false;
+
+async function refreshStoredGoogleAccessToken() {
+  const refreshToken = readGoogleRefreshToken();
+  if (!refreshToken || refreshUnavailable) return null;
+  if (!refreshInFlight) {
+    refreshInFlight = refreshGoogleAccess({ data: { refreshToken } })
+      .then((result) => {
+        if (result.ok) {
+          rememberGoogleAccessToken(result.accessToken, result.expiresIn);
+          if (result.refreshToken) rememberGoogleRefreshToken(result.refreshToken);
+          return result.accessToken;
+        }
+        if (result.reason === "invalid") clearGoogleAccessToken();
+        if (result.reason === "unconfigured") refreshUnavailable = true;
+        return null;
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+export class GoogleAccessError extends Error {}
+
+/** Returns a live Google access token, renewing it from the saved grant when it has expired. */
+export async function ensureGoogleAccessToken(session?: Session | null) {
+  rememberGoogleSession(session);
+  const current = readGoogleAccessToken();
+  if (current) return current;
+  return refreshStoredGoogleAccessToken();
+}
+
+async function googleAuthorized(accessToken: string, request: (token: string) => Promise<Response>) {
+  const first = await request(accessToken);
+  if (first.status !== 401) return first;
+  forgetGoogleAccessToken();
+  const next = await refreshStoredGoogleAccessToken();
+  if (!next) throw new GoogleAccessError("Google access expired. Connect Google again in Settings.");
+  const second = await request(next);
+  if (second.status === 401) {
+    clearGoogleAccessToken();
+    throw new GoogleAccessError("Google access expired. Connect Google again in Settings.");
+  }
+  return second;
 }
 
 export type GoogleCalendarListing = {
@@ -94,6 +227,7 @@ export type GoogleCalendarListing = {
   time: string;
   detail?: string;
   day: "today" | "upcoming";
+  startsAt: number;
 };
 
 export async function fetchPrimaryCalendarEvents(accessToken: string): Promise<GoogleCalendarListing[]> {
@@ -112,14 +246,11 @@ function isHolidayCalendar(calendar: { id?: string; summary?: string }) {
 }
 
 async function listSelectedCalendars(accessToken: string) {
-  const response = await fetch(
-    "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&showHidden=false",
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+  const response = await googleAuthorized(accessToken, (token) =>
+    fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&showHidden=false", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
   );
-  if (response.status === 401) {
-    clearGoogleAccessToken();
-    throw new GoogleAccessError("Google access expired. Connect Google again in Settings.");
-  }
   if (!response.ok) {
     return [{ id: "primary", name: "" }];
   }
@@ -144,14 +275,11 @@ async function listCalendarEvents(accessToken: string, calendar: { id: string; n
     orderBy: "startTime",
     maxResults: "40",
   });
-  const response = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?${params}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+  const response = await googleAuthorized(accessToken, (token) =>
+    fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
   );
-  if (response.status === 401) {
-    clearGoogleAccessToken();
-    throw new GoogleAccessError("Google access expired. Connect Google again in Settings.");
-  }
   if (!response.ok) return [];
 
   const payload = (await response.json()) as {
@@ -189,13 +317,12 @@ async function listCalendarEvents(accessToken: string, calendar: { id: string; n
           : "All day",
         detail,
         day: sameDay ? ("today" as const) : ("upcoming" as const),
+        startsAt: startDate.getTime(),
         sortKey: startDate.getTime(),
       },
     ];
   });
 }
-
-export class GoogleAccessError extends Error {}
 
 function localDateFromIso(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -222,9 +349,9 @@ export async function fetchUserSpreadsheets(accessToken: string): Promise<Google
     pageSize: "100",
   });
   const url = `https://www.googleapis.com/drive/v3/files?${params}`;
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await googleAuthorized(accessToken, (token) =>
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } }),
+  );
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -264,9 +391,11 @@ export async function fetchDriveAssets(accessToken: string): Promise<GoogleDrive
     orderBy: "modifiedTime desc",
     pageSize: "100",
   });
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await googleAuthorized(accessToken, (token) =>
+    fetch(`https://www.googleapis.com/drive/v3/files?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+  );
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -305,9 +434,9 @@ export async function downloadDriveFile(file: GoogleDriveFile, accessToken: stri
     ? `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=application/pdf`
     : `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await googleAuthorized(accessToken, (token) =>
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } }),
+  );
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -328,9 +457,9 @@ export async function fetchSpreadsheetValues(
 ): Promise<string[][]> {
   const encodedRange = encodeURIComponent(range);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}`;
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await googleAuthorized(accessToken, (token) =>
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } }),
+  );
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -347,9 +476,9 @@ export async function fetchSpreadsheetTabs(
   accessToken: string,
 ): Promise<string[]> {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`;
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await googleAuthorized(accessToken, (token) =>
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } }),
+  );
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;

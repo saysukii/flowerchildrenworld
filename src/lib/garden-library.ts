@@ -22,15 +22,16 @@ const STICKERS = [
   { id: "fcw-flower-icon", name: "flower", src: "/fcw-flower.png", fileId: FLOWER_FILE_ID, max: 120 },
 ] as const;
 
-function readStoredLibrary(): LibraryItems | null {
-  if (typeof localStorage === "undefined") return null;
+function readStoredLibrary(): { items: LibraryItems; keepRaw: boolean } {
+  if (typeof localStorage === "undefined") return { items: [], keepRaw: false };
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
+  if (!raw) return { items: [], keepRaw: false };
   try {
     const parsed = JSON.parse(raw) as { libraryItems?: LibraryItems };
-    return Array.isArray(parsed.libraryItems) ? parsed.libraryItems : [];
+    if (!Array.isArray(parsed.libraryItems)) return { items: [], keepRaw: true };
+    return { items: parsed.libraryItems, keepRaw: false };
   } catch {
-    return [];
+    return { items: [], keepRaw: true };
   }
 }
 
@@ -108,10 +109,48 @@ async function officialStickers(): Promise<LibraryItems> {
   return items;
 }
 
+type SketchElement = { isDeleted?: boolean; x: number; y: number };
+
+/** Keep a finished sketch in the library so the board can start empty. */
+export async function saveSketchToLibrary(api: {
+  getSceneElements: () => readonly unknown[];
+  updateLibrary?: (opts: {
+    libraryItems: unknown[];
+    merge?: boolean;
+    openLibraryMenu?: boolean;
+    defaultStatus?: "unpublished" | "published";
+  }) => Promise<unknown>;
+}, name: string) {
+  if (!api.updateLibrary) return false;
+  const elements = (api.getSceneElements() as SketchElement[]).filter((element) => !element.isDeleted);
+  if (elements.length === 0) return false;
+  const minX = Math.min(...elements.map((element) => element.x));
+  const minY = Math.min(...elements.map((element) => element.y));
+  await api.updateLibrary({
+    libraryItems: [
+      {
+        id: crypto.randomUUID(),
+        status: "unpublished",
+        created: Date.now(),
+        name,
+        elements: elements.map((element) => ({
+          ...element,
+          x: element.x - minX,
+          y: element.y - minY,
+        })),
+      },
+    ],
+    merge: true,
+    openLibraryMenu: false,
+    defaultStatus: "unpublished",
+  });
+  return true;
+}
+
 export const fcwLibraryAdapter: LibraryPersistenceAdapter = {
   async load() {
-    const stored = readStoredLibrary() ?? [];
-    const kept = stored
+    const stored = readStoredLibrary();
+    const kept = stored.items
       .filter((item) => !DROPPED_IDS.has(item.id) && item.id !== "fcw-logo" && item.id !== "fcw-flower-icon")
       .map((item) => ({ ...item, status: "unpublished" as const }));
     let official: LibraryItems = [];
@@ -121,8 +160,10 @@ export const fcwLibraryAdapter: LibraryPersistenceAdapter = {
       console.error(error);
     }
     const libraryItems = [...official, ...kept];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ libraryItems }));
-    return { libraryItems };
+    if (!stored.keepRaw) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ libraryItems }));
+    }
+    return { libraryItems: stored.keepRaw ? [...official, ...stored.items] : libraryItems };
   },
   async save(libraryData) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(libraryData));

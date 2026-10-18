@@ -68,6 +68,96 @@ export type Database = {
         }
         Relationships: []
       }
+      message_threads: {
+        Row: {
+          id: string
+          participant_emails: string[]
+          participant_names: string[]
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          participant_emails: string[]
+          participant_names: string[]
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          participant_emails?: string[]
+          participant_names?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      direct_messages: {
+        Row: {
+          id: string
+          thread_id: string
+          sender_email: string
+          sender_name: string
+          body: string
+          mentions: Json
+          created_at: string
+        }
+        Insert: {
+          id: string
+          thread_id: string
+          sender_email: string
+          sender_name: string
+          body: string
+          mentions?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          thread_id?: string
+          sender_email?: string
+          sender_name?: string
+          body?: string
+          mentions?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
+      workspace_google_connection: {
+        Row: {
+          id: string
+          account_email: string
+          access_token: string
+          refresh_token: string
+          access_expires_at: string | null
+          root_folder_id: string | null
+          community_folder_id: string | null
+          brand_folder_id: string | null
+          connected_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          account_email: string
+          access_token: string
+          refresh_token: string
+          access_expires_at?: string | null
+          root_folder_id?: string | null
+          community_folder_id?: string | null
+          brand_folder_id?: string | null
+          connected_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          account_email?: string
+          access_token?: string
+          refresh_token?: string
+          access_expires_at?: string | null
+          root_folder_id?: string | null
+          community_folder_id?: string | null
+          brand_folder_id?: string | null
+          connected_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       stripe_oauth_states: {
         Row: {
           state: string

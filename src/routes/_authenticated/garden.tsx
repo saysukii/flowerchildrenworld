@@ -71,7 +71,7 @@ function GardenPage() {
               A place to think.
             </h1>
             <p className="mt-1.5 text-sm text-foreground/60 sm:mt-2">
-              Notes, ideas, and sketches — plant something.
+              Write a note, or sketch on the whiteboard.
             </p>
           </header>
         </Reveal>

@@ -106,6 +106,16 @@ export const Route = createFileRoute("/api/forms/submit")({
           email: recipientEmail,
         });
 
+        try {
+          const { readCommunityDirectory, writeCommunityDirectory } = await import("@/lib/drive-workspace.server");
+          const { applyFormSubmission } = await import("@/lib/public-form-submit");
+          const { loadCommunityStore } = await import("@/lib/community");
+          const remote = (await readCommunityDirectory()) ?? loadCommunityStore();
+          await writeCommunityDirectory(applyFormSubmission(remote as ReturnType<typeof loadCommunityStore>, submission));
+        } catch (err) {
+          console.error("[Forms] Drive directory was not updated", err);
+        }
+
         let emailSent = false;
         if (isEmailConfigured()) {
           try {

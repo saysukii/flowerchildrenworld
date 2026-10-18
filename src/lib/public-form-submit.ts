@@ -50,8 +50,7 @@ export type EnrollmentSubmission = {
 
 export type FormSubmission = VolunteerSubmission | PartnerSubmission | EnrollmentSubmission;
 
-function recordFormSubmission(payload: FormSubmission) {
-  const store = loadCommunityStore();
+export function applyFormSubmission(store: ReturnType<typeof loadCommunityStore>, payload: FormSubmission) {
   const today = todayAddedAt();
 
   if (payload.type === "volunteer") {
@@ -66,8 +65,7 @@ function recordFormSubmission(payload: FormSubmission) {
       source: payload.hear_about || "Website form",
       addedAt: today,
     };
-    saveCommunityStore(appendRecordsForTab(store, "volunteers", [volunteer]));
-    return;
+    return appendRecordsForTab(store, "volunteers", [volunteer]);
   }
 
   if (payload.type === "partner") {
@@ -82,8 +80,7 @@ function recordFormSubmission(payload: FormSubmission) {
       status: "Active",
       addedAt: today,
     };
-    saveCommunityStore(appendRecordsForTab(store, "partners", [partner]));
-    return;
+    return appendRecordsForTab(store, "partners", [partner]);
   }
 
   const guardian: GuardianRecord = {
@@ -109,7 +106,11 @@ function recordFormSubmission(payload: FormSubmission) {
     guardianLink: "",
     notes: payload.notes ?? "",
   };
-  saveCommunityStore(saveChildWithGuardian(store, child, guardian, true));
+  return saveChildWithGuardian(store, child, guardian, true);
+}
+
+function recordFormSubmission(payload: FormSubmission) {
+  saveCommunityStore(applyFormSubmission(loadCommunityStore(), payload));
 }
 
 export async function submitPublicForm(payload: FormSubmission) {

@@ -71,8 +71,12 @@ import { getDisplayName, isAdmin } from "@/lib/user-role";
 
 import {
   GOOGLE_INTEGRATION_SCOPES,
+  clearGoogleAccessToken,
   googleIntegrationFromSession,
+  readGoogleAccessToken,
+  readGoogleRefreshToken,
 } from "@/lib/google";
+import { saveWorkspaceGoogleGrant } from "@/lib/api/google.functions";
 import {
   fileToAvatarDataUrl,
   resolveAvatarUrl,
@@ -276,6 +280,11 @@ function SettingsPage() {
       }
       setIntegrations(loadIntegrations());
       syncGoogleIntegration(data.session);
+      const refreshToken = data.session?.provider_refresh_token || readGoogleRefreshToken();
+      const accessToken = data.session?.provider_token || readGoogleAccessToken();
+      if (userIsAdmin && refreshToken && accessToken) {
+        void saveWorkspaceGoogleGrant({ data: { accessToken, refreshToken } }).catch(() => undefined);
+      }
       if (userIsAdmin) {
         void refreshStripeStatus();
       }
@@ -287,6 +296,12 @@ function SettingsPage() {
       if (session?.provider_token) {
         setConnectingGoogle(false);
         toast.success("Google sign-in, Calendar, and Drive are connected.");
+        const refreshToken = session.provider_refresh_token || readGoogleRefreshToken();
+        if (refreshToken && isAdmin(session.user)) {
+          void saveWorkspaceGoogleGrant({
+            data: { accessToken: session.provider_token, refreshToken },
+          }).catch(() => undefined);
+        }
       }
     });
 
@@ -486,7 +501,7 @@ function SettingsPage() {
         scopes: GOOGLE_INTEGRATION_SCOPES,
         queryParams: {
           access_type: "offline",
-          prompt: "consent",
+          ...(readGoogleRefreshToken() ? {} : { prompt: "consent" }),
         },
       },
     });
@@ -497,6 +512,7 @@ function SettingsPage() {
   }
 
   function disconnectGoogle() {
+    clearGoogleAccessToken();
     const next = { ...integrations, google: { connected: false, accountName: "", spreadsheetId: "" } };
     setIntegrations(next);
     saveIntegrations(next);
@@ -554,7 +570,7 @@ function SettingsPage() {
         <header className="mb-8">
           <span className="font-label text-[11px] text-foreground/50">Settings</span>
           <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Your workspace</h1>
-          <p className="mt-2 text-sm text-foreground/60">Account, team, integrations, and security.</p>
+          <p className="mt-2 text-sm text-foreground/60">Your account, the team, and connected tools.</p>
         </header>
 
         <div className="space-y-8">
@@ -602,7 +618,7 @@ function SettingsPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-normal">Reset password</p>
-                  <p className="text-xs text-foreground/50">Send a reset link to your email.</p>
+                  <p className="text-xs text-foreground/50">Email a link to set a new password.</p>
                 </div>
                 <button
                   type="button"
@@ -705,7 +721,7 @@ function SettingsPage() {
               <div className="space-y-6">
                 <IntegrationCard
                   title="Google"
-                  description="Sign in, Calendar, and Drive."
+                  description="Connect Calendar and Drive for this workspace."
                   connected={integrations.google.connected}
                   accountName={integrations.google.accountName}
                   connectLabel="Connect to Google"
@@ -715,7 +731,7 @@ function SettingsPage() {
                 />
                 <IntegrationCard
                   title="Stripe"
-                  description="Donation analytics from your Stripe account."
+                  description="Connect the Stripe account that receives gifts."
                   connected={stripeStatus.connected}
                   accountName={stripeStatus.accountName}
                   connectLabel="Connect Stripe"

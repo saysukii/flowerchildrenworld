@@ -18,6 +18,7 @@ import { isDevMock, MOCK_TEAM_MEMBERS } from "@/lib/dev-mock-data";
 import {
   formatMessageTime,
   loadMessagesStore,
+  pullDirectedMessages,
   markAllNotificationsRead,
   markNotificationRead,
   notificationsForUser,
@@ -65,6 +66,7 @@ function resolveCurrentMember(email: string, name: string, userId: string, admin
 
 export function MessageInboxProvider({ children }: { children: ReactNode }) {
   const [memberId, setMemberId] = useState<string | null>(null);
+  const [memberEmail, setMemberEmail] = useState<string | null>(null);
   const [store, setStore] = useState<MessagesStore>(() =>
     typeof window === "undefined"
       ? { threads: [], messages: [], notifications: [], threadReads: {} }
@@ -79,6 +81,7 @@ export function MessageInboxProvider({ children }: { children: ReactNode }) {
       const user = data.session?.user;
       if (!active || !user?.email) {
         setMemberId(null);
+        setMemberEmail(null);
         return;
       }
       const member = resolveCurrentMember(
@@ -88,7 +91,11 @@ export function MessageInboxProvider({ children }: { children: ReactNode }) {
         isAdmin(user),
       );
       setMemberId(member.id);
+      setMemberEmail(member.email);
       setStore(loadMessagesStore());
+      void pullDirectedMessages(member, loadTeamMembers().concat(member)).then((next) => {
+        if (active && next) setStore(next);
+      });
     }
 
     void loadUser();
@@ -107,10 +114,10 @@ export function MessageInboxProvider({ children }: { children: ReactNode }) {
     return subscribeMessagesChanged(() => setStore(loadMessagesStore()));
   }, []);
 
-  const unread = memberId ? unreadNotificationCount(store, memberId) : 0;
+  const unread = memberId ? unreadNotificationCount(store, memberId, memberEmail ?? undefined) : 0;
   const items = useMemo(
-    () => (memberId ? notificationsForUser(store, memberId).slice(0, 20) : []),
-    [store, memberId],
+    () => (memberId ? notificationsForUser(store, memberId, memberEmail ?? undefined).slice(0, 20) : []),
+    [store, memberId, memberEmail],
   );
 
   const value = useMemo(

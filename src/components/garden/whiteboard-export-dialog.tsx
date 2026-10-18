@@ -26,6 +26,7 @@ type WhiteboardExportDialogProps = {
   userId: string;
   api: ExcalidrawApi | null;
   onNewNoteCreated?: (note: GardenNote) => void;
+  onExported?: (api: ExcalidrawApi) => void;
 };
 
 function appendExportToNoteBody(existing: string, exportHtml: string) {
@@ -47,6 +48,7 @@ export function WhiteboardExportDialog({
   userId,
   api,
   onNewNoteCreated,
+  onExported,
 }: WhiteboardExportDialogProps) {
   const [notes, setNotes] = useState<GardenNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
@@ -100,7 +102,6 @@ export function WhiteboardExportDialog({
           return;
         }
 
-        toast.success("Exported — keep editing in the note.");
         onNewNoteCreated?.(data as GardenNote);
       } else {
         const note = notes.find((n) => n.id === selection);
@@ -120,9 +121,10 @@ export function WhiteboardExportDialog({
           return;
         }
 
-        toast.success(`Added to "${note.title.trim() || "Untitled"}".`);
       }
 
+      onExported?.(api);
+      toast.success("Saved to the note and the library. The board is clear.");
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not export to note.");

@@ -28,6 +28,7 @@ import {
   isGroupThread,
   lastMessagePreview,
   loadMessagesStore,
+  pullDirectedMessages,
   markThreadRead,
   mentionSegments,
   parseMentions,
@@ -36,6 +37,7 @@ import {
   sendMessage,
   subscribeMessagesChanged,
   threadPartnerName,
+  threadIncludesUser,
   threadsForUser,
   unreadCountForThread,
   type MessagesStore,
@@ -116,7 +118,6 @@ function MessagesPage() {
   const navigate = useNavigate();
   const { thread: threadFromSearch } = Route.useSearch();
   const [ready, setReady] = useState(false);
-  const [admin, setAdmin] = useState(false);
   const [current, setCurrent] = useState<TeamMember | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [store, setStore] = useState<MessagesStore>({
@@ -160,11 +161,13 @@ function MessagesPage() {
       const directory = mergeTeamDirectory(user.email, name, userIsAdmin);
       const me = resolveCurrentMember(directory, user.email, name, user.id);
 
-      setAdmin(userIsAdmin);
       setMembers(directory);
       setCurrent(me);
       setStore(loadMessagesStore());
       setReady(true);
+      void pullDirectedMessages(me, directory).then((next) => {
+        if (next) setStore(next);
+      });
     })();
   }, [navigate]);
 
@@ -206,7 +209,7 @@ function MessagesPage() {
 
   const myThreads = useMemo(() => {
     if (!current) return [];
-    return threadsForUser(store, current.id);
+    return threadsForUser(store, current.id, current.email);
   }, [store, current]);
 
   const filteredThreads = useMemo(() => {
@@ -219,10 +222,11 @@ function MessagesPage() {
     });
   }, [myThreads, query, current, store]);
 
-  const activeThread = useMemo(
-    () => store.threads.find((t) => t.id === activeThreadId) ?? null,
-    [store.threads, activeThreadId],
-  );
+  const activeThread = useMemo(() => {
+    const thread = store.threads.find((t) => t.id === activeThreadId);
+    if (!thread || !current || !threadIncludesUser(thread, current.id, current.email)) return null;
+    return thread;
+  }, [store.threads, activeThreadId, current]);
 
   const activeMessages = useMemo(
     () => (activeThreadId ? messagesForThread(store, activeThreadId) : []),
@@ -438,8 +442,7 @@ function MessagesPage() {
               <span className="font-label text-[11px] text-foreground/50">Messages</span>
               <h1 className="mt-2 text-2xl font-normal leading-tight sm:text-3xl">Team messages</h1>
               <p className="mt-2 text-sm text-foreground/60">
-                Talk with the team — use @ to mention who you&apos;re speaking to.
-                {admin ? " Admins can message anyone." : ""}
+                Message the team. Type @ to mention someone.
               </p>
             </div>
             <Button

@@ -12,6 +12,7 @@ import {
   type GardenNote,
 } from "@/lib/garden";
 import type { ExcalidrawApi } from "@/lib/garden-whiteboard-types";
+import { saveSketchToLibrary } from "@/lib/garden-library";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -117,14 +118,38 @@ export function WhiteboardTab({ userId, onNewNoteCreated }: WhiteboardTabProps) 
     [saveScene],
   );
 
-  const handleReset = useCallback(async () => {
+  const clearBoard = useCallback(async () => {
     sceneRef.current = EMPTY_WHITEBOARD_SCENE;
     setInitialScene(EMPTY_WHITEBOARD_SCENE);
     setHasContent(false);
     setCanvasKey((key) => key + 1);
     await saveScene(false, EMPTY_WHITEBOARD_SCENE);
-    toast.success("Whiteboard reset.");
   }, [saveScene]);
+
+  const handleReset = useCallback(async () => {
+    await clearBoard();
+    toast.success("Whiteboard reset.");
+  }, [clearBoard]);
+
+  const handleExported = useCallback(
+    async (api: ExcalidrawApi) => {
+      await saveSketchToLibrary(api, `Sketch ${new Date().toLocaleDateString()}`);
+      await clearBoard();
+    },
+    [clearBoard],
+  );
+
+  const handleNewSketch = useCallback(
+    async (api: ExcalidrawApi) => {
+      const elements = api.getSceneElements();
+      if (elements.length > 0) {
+        await saveSketchToLibrary(api, `Sketch ${new Date().toLocaleDateString()}`);
+        toast.success("Sketch saved in the library. The board is clear.");
+      }
+      await clearBoard();
+    },
+    [clearBoard],
+  );
 
   const handleSave = useCallback(async () => {
     await saveScene(true);
@@ -184,6 +209,7 @@ export function WhiteboardTab({ userId, onNewNoteCreated }: WhiteboardTabProps) 
             onChange={handleChange}
             onSave={handleSave}
             onExportToNote={handleExportToNote}
+            onNewSketch={handleNewSketch}
             onReset={handleReset}
             onMenuOpenChange={setMenuOpen}
             isMobile={isMobile}
@@ -199,6 +225,9 @@ export function WhiteboardTab({ userId, onNewNoteCreated }: WhiteboardTabProps) 
         userId={userId}
         api={exportApiRef.current}
         onNewNoteCreated={onNewNoteCreated}
+        onExported={(api) => {
+          void handleExported(api);
+        }}
       />
     </div>
   );

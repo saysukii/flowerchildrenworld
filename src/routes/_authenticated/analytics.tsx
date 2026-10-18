@@ -240,7 +240,7 @@ function AnalyticsPage() {
               <span className="font-label text-[11px] text-foreground/50">Analytics</span>
               <h1 className="mt-2 text-2xl sm:text-3xl font-normal leading-tight">How we&apos;re growing</h1>
               <p className="mt-2 text-sm text-foreground/60">
-                Community, events, donations, and engagement — all in one place.
+                See how the village grew this year.
               </p>
             </div>
             <YearSelector years={years} value={selectedYear} onChange={setSelectedYear} />

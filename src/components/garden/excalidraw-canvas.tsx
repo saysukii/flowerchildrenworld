@@ -1,6 +1,6 @@
 import { Excalidraw, MainMenu, useHandleLibrary } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
-import { FileText, Library, Save, Trash2 } from "lucide-react";
+import { FilePlus2, FileText, Library, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { WhiteboardColorToolbarPortal } from "@/components/garden/whiteboard-color-toolbar-portal";
@@ -33,6 +33,7 @@ type ExcalidrawCanvasProps = {
   onChange: (scene: GardenWhiteboardScene) => void;
   onSave: () => Promise<void>;
   onExportToNote: (api: ExcalidrawApi) => Promise<void>;
+  onNewSketch: (api: ExcalidrawApi) => Promise<void>;
   onReset: () => Promise<void>;
   onMenuOpenChange?: (open: boolean) => void;
   isMobile?: boolean;
@@ -43,6 +44,7 @@ export function ExcalidrawCanvas({
   onChange,
   onSave,
   onExportToNote,
+  onNewSketch,
   onReset,
   onMenuOpenChange,
   isMobile = false,
@@ -248,6 +250,15 @@ export function ExcalidrawCanvas({
             icon={<FileText className="h-4 w-4" strokeWidth={1.75} />}
           >
             Export to note
+          </MainMenu.Item>
+          <MainMenu.Item
+            onSelect={() => {
+              const api = apiRef.current;
+              if (api) void onNewSketch(api);
+            }}
+            icon={<FilePlus2 className="h-4 w-4" strokeWidth={1.75} />}
+          >
+            New sketch
           </MainMenu.Item>
           <MainMenu.Separator />
           <MainMenu.DefaultItems.SearchMenu />
