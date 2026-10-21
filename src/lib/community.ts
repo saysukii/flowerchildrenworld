@@ -253,6 +253,23 @@ export function toDateInputValue(value: string) {
   return `${String(yearNum).padStart(4, "0")}-${slash[1].padStart(2, "0")}-${slash[2].padStart(2, "0")}`;
 }
 
+/** Whole years from a stored date of birth. Empty or invalid dates return null. */
+export function ageFromDob(value: string, today = new Date()): number | null {
+  const iso = toDateInputValue(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const birth = new Date(year, month - 1, day);
+  if (birth.getFullYear() !== year || birth.getMonth() !== month - 1 || birth.getDate() !== day) return null;
+  let age = today.getFullYear() - year;
+  const beforeBirthday = today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < day);
+  if (beforeBirthday) age -= 1;
+  if (age < 0 || age > 120) return null;
+  return age;
+}
+
 export function getRecordsForTab(store: CommunityStore, tab: CommunityTab) {
   return store[tab];
 }
@@ -513,11 +530,13 @@ export function saveChildWithGuardian(
 }
 
 export function formatChildRow(child: ChildRecord) {
+  const age = ageFromDob(child.dateOfBirth);
   return {
     name: child.fullName,
     program: child.program,
     status: child.status,
     dob: formatDob(child.dateOfBirth),
+    age: age == null ? "" : String(age),
   };
 }
 
@@ -588,6 +607,10 @@ export function updateGuardianRecord(store: CommunityStore, guardian: GuardianRe
       child.guardianId === guardian.id ? { ...child, guardianLink: guardian.guardianName } : child,
     ),
   };
+}
+
+export function deleteCommunityRecords(store: CommunityStore, tab: CommunityTab, ids: string[]): CommunityStore {
+  return ids.reduce((next, id) => deleteCommunityRecord(next, tab, id), store);
 }
 
 export function deleteCommunityRecord(store: CommunityStore, tab: CommunityTab, id: string): CommunityStore {

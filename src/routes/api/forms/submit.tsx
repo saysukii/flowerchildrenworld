@@ -20,6 +20,17 @@ function jsonResponse(body: unknown, status: number) {
   });
 }
 
+const EmailLanguageSchema = z
+  .object({
+    subject: z.string().max(200).optional(),
+    eyebrow: z.string().max(80),
+    headline: z.string().max(200),
+    body: z.string().max(4000),
+    button: z.string().max(80),
+    note: z.string().max(400),
+  })
+  .optional();
+
 const VolunteerSchema = z.object({
   type: z.literal("volunteer"),
   first_name: z.string().min(1).max(100),
@@ -30,6 +41,7 @@ const VolunteerSchema = z.object({
   skills: z.string().max(2000).optional(),
   availability: z.string().max(500).optional(),
   notes: z.string().max(2000).optional(),
+  email_language: EmailLanguageSchema,
 });
 
 const PartnerSchema = z.object({
@@ -41,6 +53,7 @@ const PartnerSchema = z.object({
   partnership_type: z.string().max(100).optional(),
   show_up: z.string().max(2000).optional(),
   message: z.string().max(2000).optional(),
+  email_language: EmailLanguageSchema,
 });
 
 const EnrollmentSchema = z.object({
@@ -54,6 +67,7 @@ const EnrollmentSchema = z.object({
   emergency_contact_name: z.string().min(1).max(100),
   emergency_contact_phone: z.string().min(1).max(50),
   notes: z.string().max(2000).optional(),
+  email_language: EmailLanguageSchema,
 });
 
 const FormSubmitSchema = z.discriminatedUnion("type", [
@@ -80,7 +94,7 @@ export const Route = createFileRoute("/api/forms/submit")({
           return jsonResponse({ error: "Invalid input", details: parsed.error.flatten() }, 400);
         }
 
-        const submission = parsed.data;
+        const { email_language, ...submission } = parsed.data;
         const appOrigin = getAppOrigin(ALLOWED_ORIGIN);
 
         let recipientEmail = "";
@@ -124,6 +138,7 @@ export const Route = createFileRoute("/api/forms/submit")({
               to: recipientEmail,
               vars,
               origin: appOrigin,
+              language: email_language,
             });
             emailSent = true;
           } catch (err) {

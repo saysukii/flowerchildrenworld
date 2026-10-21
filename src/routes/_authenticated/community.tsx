@@ -37,9 +37,10 @@ import {
   type GuardianRecord,
   type PartnerRecord,
   type VolunteerRecord,
+  ageFromDob,
   appendRecordsForTab,
   COMMUNITY_UPDATED_EVENT,
-  deleteCommunityRecord,
+  deleteCommunityRecords,
   filterRecords,
   formatChildRow,
   formatDob,
@@ -88,7 +89,7 @@ const TABS: TabConfig[] = [
     label: "Children",
     addLabel: "Add child",
     searchPlaceholder: "Search children...",
-    columns: ["Status", "Name", "Program", "DOB", "Actions"],
+    columns: ["Status", "Name", "Program", "DOB", "Age", "Actions"],
     emptyState: "No children added yet. Start building the village.",
   },
   {
@@ -188,19 +189,63 @@ function TypeMark({ value }: { value: string }) {
   );
 }
 
+function RecordName({ name, onOpen }: { name: string; onOpen?: () => void }) {
+  if (!onOpen) return <>{name}</>;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="text-left underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground"
+    >
+      {name}
+    </button>
+  );
+}
+
+function RowCheck({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      aria-label={label}
+      className="h-4 w-4 accent-[#3AB819]"
+    />
+  );
+}
+
 function MobileRecordCard({
   title,
   lines,
   menu,
+  onOpen,
+  selected,
+  onSelect,
 }: {
   title: string;
   lines: { label: string; value: string }[];
   menu?: React.ReactNode;
+  onOpen?: () => void;
+  selected?: boolean;
+  onSelect?: () => void;
 }) {
   return (
     <div className="px-4 py-4">
+      <div className="flex items-start gap-3">
+        {onSelect ? <RowCheck checked={!!selected} onChange={onSelect} label={`Select ${title}`} /> : null}
+        <div className="min-w-0 flex-1">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-normal text-foreground">{title}</p>
+        <p className="text-sm font-normal text-foreground">
+          <RecordName name={title} onOpen={onOpen} />
+        </p>
         {menu}
       </div>
       <dl className="mt-2 space-y-1">
@@ -219,6 +264,8 @@ function MobileRecordCard({
           </div>
         ))}
       </dl>
+        </div>
+      </div>
     </div>
   );
 }
@@ -227,7 +274,8 @@ function CommunityPage() {
   const [tab, setTab] = useState<TabKey>("children");
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState<{ mode: "add" } | { mode: "edit"; record: CommunityRecord } | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<CommunityRecord | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteTargets, setDeleteTargets] = useState<CommunityRecord[]>([]);
   const [admin, setAdmin] = useState(false);
   const [sheetsImportOpen, setSheetsImportOpen] = useState(false);
   const [defaultSpreadsheetId, setDefaultSpreadsheetId] = useState("");
@@ -298,6 +346,23 @@ function CommunityPage() {
       ]),
     [store.partners, query],
   );
+
+  const visibleRecords = useMemo((): CommunityRecord[] => {
+    if (tab === "children") return filteredChildren;
+    if (tab === "guardians") return filteredGuardians;
+    if (tab === "volunteers") return filteredVolunteers;
+    return filteredPartners;
+  }, [tab, filteredChildren, filteredGuardians, filteredVolunteers, filteredPartners]);
+
+  const allVisibleSelected = visibleRecords.length > 0 && visibleRecords.every((record) => selectedIds.includes(record.id));
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  function toggleAllVisible() {
+    setSelectedIds(allVisibleSelected ? [] : visibleRecords.map((record) => record.id));
+  }
 
   function handleImport(records: CommunityRecord[]) {
     if (tab === "children") persist(appendRecordsForTab(store, tab, records as ChildRecord[]));
@@ -427,7 +492,10 @@ function CommunityPage() {
                 return (
                   <button
                     key={t.key}
-                    onClick={() => setTab(t.key)}
+                    onClick={() => {
+                      setTab(t.key);
+                      setSelectedIds([]);
+                    }}
                     className={[
                       "rounded-full px-4 py-2 text-sm font-light transition-colors whitespace-nowrap",
                       isActive
@@ -446,6 +514,20 @@ function CommunityPage() {
         {/* Records */}
         <Reveal delayMs={100}>
         <section className="moss-card min-w-0 overflow-hidden rounded-3xl">
+          {admin && selectedIds.length > 0 ? (
+            <div className="flex items-center justify-between gap-3 border-b border-black/5 px-5 py-3">
+              <p className="text-sm font-light text-foreground/60">
+                {selectedIds.length} selected
+              </p>
+              <button
+                type="button"
+                onClick={() => setDeleteTargets(visibleRecords.filter((record) => selectedIds.includes(record.id)))}
+                className="text-sm font-normal text-[#C53D3D]"
+              >
+                Delete
+              </button>
+            </div>
+          ) : null}
           <div className="md:hidden divide-y divide-black/5">
             {!ready ? (
               <p className="px-4 py-16 text-center text-sm text-foreground/50">Loading…</p>
@@ -456,11 +538,15 @@ function CommunityPage() {
                   <MobileRecordCard
                     key={child.id}
                     title={row.name}
-                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: child })} onDelete={() => setDeleteTarget(child)} /> : undefined}
+                    onOpen={admin ? () => setEditor({ mode: "edit", record: child }) : undefined}
+                    selected={selectedIds.includes(child.id)}
+                    onSelect={admin ? () => toggleSelected(child.id) : undefined}
+                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: child })} onDelete={() => setDeleteTargets([child])} /> : undefined}
                     lines={[
                       { label: "Status", value: row.status },
                       { label: "Program", value: row.program },
                       { label: "DOB", value: row.dob || "—" },
+                      { label: "Age", value: row.age || "—" },
                     ]}
                   />
                 );
@@ -472,7 +558,10 @@ function CommunityPage() {
                   <MobileRecordCard
                     key={guardian.id}
                     title={row.name}
-                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: guardian })} onDelete={() => setDeleteTarget(guardian)} /> : undefined}
+                    onOpen={admin ? () => setEditor({ mode: "edit", record: guardian }) : undefined}
+                    selected={selectedIds.includes(guardian.id)}
+                    onSelect={admin ? () => toggleSelected(guardian.id) : undefined}
+                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: guardian })} onDelete={() => setDeleteTargets([guardian])} /> : undefined}
                     lines={[
                       { label: "Status", value: row.status },
                       { label: "Email", value: row.email || "—" },
@@ -489,7 +578,10 @@ function CommunityPage() {
                   <MobileRecordCard
                     key={volunteer.id}
                     title={row.name}
-                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: volunteer })} onDelete={() => setDeleteTarget(volunteer)} /> : undefined}
+                    onOpen={admin ? () => setEditor({ mode: "edit", record: volunteer }) : undefined}
+                    selected={selectedIds.includes(volunteer.id)}
+                    onSelect={admin ? () => toggleSelected(volunteer.id) : undefined}
+                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: volunteer })} onDelete={() => setDeleteTargets([volunteer])} /> : undefined}
                     lines={[
                       { label: "Status", value: row.status },
                       { label: "Email", value: row.email || "—" },
@@ -506,7 +598,10 @@ function CommunityPage() {
                   <MobileRecordCard
                     key={partner.id}
                     title={row.name}
-                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: partner })} onDelete={() => setDeleteTarget(partner)} /> : undefined}
+                    onOpen={admin ? () => setEditor({ mode: "edit", record: partner }) : undefined}
+                    selected={selectedIds.includes(partner.id)}
+                    onSelect={admin ? () => toggleSelected(partner.id) : undefined}
+                    menu={admin ? <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: partner })} onDelete={() => setDeleteTargets([partner])} /> : undefined}
                     lines={[
                       { label: "Status", value: row.status },
                       { label: "Organization", value: row.organization },
@@ -525,6 +620,15 @@ function CommunityPage() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-black/5 text-[11px] font-normal text-foreground/40">
+                  {admin ? (
+                    <th className="w-10 px-4 py-3 font-normal">
+                      <RowCheck
+                        checked={allVisibleSelected}
+                        onChange={toggleAllVisible}
+                        label="Select all"
+                      />
+                    </th>
+                  ) : null}
                   {columns.map((col) => (
                     <th
                       key={col}
@@ -542,7 +646,7 @@ function CommunityPage() {
               <tbody>
                 {!ready ? (
                   <tr>
-                    <td colSpan={columns.length} className="px-5 py-16 text-center text-sm text-foreground/50">
+                    <td colSpan={columns.length + (admin ? 1 : 0)} className="px-5 py-16 text-center text-sm text-foreground/50">
                       Loading…
                     </td>
                   </tr>
@@ -551,17 +655,25 @@ function CommunityPage() {
                     const row = formatChildRow(child);
                     return (
                       <tr key={child.id} className="border-b border-black/5 last:border-0">
+                        {admin ? (
+                          <td className="px-4 py-3.5">
+                            <RowCheck checked={selectedIds.includes(child.id)} onChange={() => toggleSelected(child.id)} label={`Select ${row.name}`} />
+                          </td>
+                        ) : null}
                         <td className={statusCell}>
                           <StatusMark value={row.status} />
                         </td>
-                        <td className={nameCell} title={row.name}>{row.name}</td>
+                        <td className={nameCell} title={row.name}>
+                          <RecordName name={row.name} onOpen={admin ? () => setEditor({ mode: "edit", record: child }) : undefined} />
+                        </td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-sm">
                           <TypeMark value={row.program} />
                         </td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-sm font-light tabular-nums text-foreground/50">{row.dob || "—"}</td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm font-light tabular-nums text-foreground/50">{row.age || "—"}</td>
                         {admin ? (
                           <td className="px-3 py-2 text-right">
-                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: child })} onDelete={() => setDeleteTarget(child)} />
+                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: child })} onDelete={() => setDeleteTargets([child])} />
                           </td>
                         ) : null}
                       </tr>
@@ -572,16 +684,23 @@ function CommunityPage() {
                     const row = formatGuardianRow(guardian);
                     return (
                       <tr key={guardian.id} className="border-b border-black/5 last:border-0">
+                        {admin ? (
+                          <td className="px-4 py-3.5">
+                            <RowCheck checked={selectedIds.includes(guardian.id)} onChange={() => toggleSelected(guardian.id)} label={`Select ${row.name}`} />
+                          </td>
+                        ) : null}
                         <td className={statusCell}>
                           <StatusMark value={row.status} />
                         </td>
-                        <td className={nameCell} title={row.name}>{row.name}</td>
+                        <td className={nameCell} title={row.name}>
+                          <RecordName name={row.name} onOpen={admin ? () => setEditor({ mode: "edit", record: guardian }) : undefined} />
+                        </td>
                         <td className={metaCell} title={row.email}>{row.email || "—"}</td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-sm font-light text-foreground/50">{row.phone || "—"}</td>
                         <td className={metaCell} title={row.linkedChildren}>{row.linkedChildren || "—"}</td>
                         {admin ? (
                           <td className="px-3 py-2 text-right">
-                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: guardian })} onDelete={() => setDeleteTarget(guardian)} />
+                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: guardian })} onDelete={() => setDeleteTargets([guardian])} />
                           </td>
                         ) : null}
                       </tr>
@@ -592,10 +711,17 @@ function CommunityPage() {
                     const row = formatVolunteerRow(volunteer);
                     return (
                       <tr key={volunteer.id} className="border-b border-black/5 last:border-0">
+                        {admin ? (
+                          <td className="px-4 py-3.5">
+                            <RowCheck checked={selectedIds.includes(volunteer.id)} onChange={() => toggleSelected(volunteer.id)} label={`Select ${row.name}`} />
+                          </td>
+                        ) : null}
                         <td className={statusCell}>
                           <StatusMark value={row.status} />
                         </td>
-                        <td className={nameCell} title={row.name}>{row.name}</td>
+                        <td className={nameCell} title={row.name}>
+                          <RecordName name={row.name} onOpen={admin ? () => setEditor({ mode: "edit", record: volunteer }) : undefined} />
+                        </td>
                         <td className={metaCell} title={row.email}>{row.email || "—"}</td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-sm font-light text-foreground/50">{row.phone || "—"}</td>
                         <td className={metaCell} title={row.skills}>
@@ -603,7 +729,7 @@ function CommunityPage() {
                         </td>
                         {admin ? (
                           <td className="px-3 py-2 text-right">
-                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: volunteer })} onDelete={() => setDeleteTarget(volunteer)} />
+                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: volunteer })} onDelete={() => setDeleteTargets([volunteer])} />
                           </td>
                         ) : null}
                       </tr>
@@ -614,10 +740,17 @@ function CommunityPage() {
                     const row = formatPartnerRow(partner);
                     return (
                       <tr key={partner.id} className="border-b border-black/5 last:border-0">
+                        {admin ? (
+                          <td className="px-4 py-3.5">
+                            <RowCheck checked={selectedIds.includes(partner.id)} onChange={() => toggleSelected(partner.id)} label={`Select ${row.name}`} />
+                          </td>
+                        ) : null}
                         <td className={statusCell}>
                           <StatusMark value={row.status} />
                         </td>
-                        <td className={nameCell} title={row.name}>{row.name}</td>
+                        <td className={nameCell} title={row.name}>
+                          <RecordName name={row.name} onOpen={admin ? () => setEditor({ mode: "edit", record: partner }) : undefined} />
+                        </td>
                         <td className={metaCell} title={row.organization}>{row.organization}</td>
                         <td className={metaCell} title={row.email}>{row.email || "—"}</td>
                         <td className="whitespace-nowrap px-5 py-3.5 text-sm">
@@ -625,7 +758,7 @@ function CommunityPage() {
                         </td>
                         {admin ? (
                           <td className="px-3 py-2 text-right">
-                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: partner })} onDelete={() => setDeleteTarget(partner)} />
+                            <RecordMenu label={row.name} onEdit={() => setEditor({ mode: "edit", record: partner })} onDelete={() => setDeleteTargets([partner])} />
                           </td>
                         ) : null}
                       </tr>
@@ -633,7 +766,7 @@ function CommunityPage() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={columns.length} className="px-5 py-16 text-center text-sm text-foreground/50">
+                    <td colSpan={columns.length + (admin ? 1 : 0)} className="px-5 py-16 text-center text-sm text-foreground/50">
                       {active.emptyState}
                     </td>
                   </tr>
@@ -668,21 +801,24 @@ function CommunityPage() {
         />
       ) : null}
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialog open={deleteTargets.length > 0} onOpenChange={(open) => !open && setDeleteTargets([])}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-normal">Delete {deleteTarget ? recordLabel(deleteTarget) : "this record"}?</AlertDialogTitle>
+            <AlertDialogTitle className="font-normal">
+              {deleteTargets.length === 1 ? `Delete ${recordLabel(deleteTargets[0])}?` : `Delete ${deleteTargets.length} records?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the record from the village directory. Linked names are updated with it.
+              This removes {deleteTargets.length === 1 ? "the record" : "these records"} from the village directory. Linked names are updated with them.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (!deleteTarget) return;
-                persist(deleteCommunityRecord(store, tab, deleteTarget.id));
-                setDeleteTarget(null);
+                if (deleteTargets.length === 0) return;
+                persist(deleteCommunityRecords(store, tab, deleteTargets.map((record) => record.id)));
+                setSelectedIds((current) => current.filter((id) => !deleteTargets.some((record) => record.id === id)));
+                setDeleteTargets([]);
               }}
               className="bg-[#C53D3D] text-white hover:bg-[#C53D3D]/90"
             >
@@ -1040,14 +1176,17 @@ function LinkedChildrenSummary({ childrenRecords }: { childrenRecords: ChildReco
   return (
     <div className="space-y-2 rounded-2xl border border-black/5 bg-[#FCFCFC] px-4 py-4">
       <span className="block text-xs font-light text-foreground/60">Linked children</span>
-      {childrenRecords.map((child) => (
+      {childrenRecords.map((child) => {
+        const age = ageFromDob(child.dateOfBirth);
+        return (
         <div key={child.id} className="rounded-xl bg-white px-3 py-2.5">
           <p className="text-sm font-normal">{child.fullName}</p>
           <p className="mt-0.5 text-xs font-light text-foreground/55">
-            {[child.program, child.status, formatDob(child.dateOfBirth)].filter(Boolean).join(" · ")}
+            {[child.program, child.status, formatDob(child.dateOfBirth), age == null ? "" : `age ${age}`].filter(Boolean).join(" · ")}
           </p>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -1182,6 +1321,16 @@ function ChildrenFields({
           birth
           value={values.dateOfBirth}
           onChange={(dateOfBirth) => onChange({ ...values, dateOfBirth })}
+        />
+      </Field>
+      <Field label="Age">
+        <input
+          readOnly
+          tabIndex={-1}
+          aria-label="Age"
+          value={ageFromDob(values.dateOfBirth) ?? ""}
+          placeholder="—"
+          className={cn(inputCls, "bg-[#FCFCFC] text-foreground/70")}
         />
       </Field>
       <Field label="Program">

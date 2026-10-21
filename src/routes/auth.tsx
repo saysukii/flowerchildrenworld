@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import fcwLogo from "@/assets/fcw-full-logo.png.asset.json";
@@ -26,7 +26,29 @@ function AuthPage() {
   const [mode, setMode] = useState<"magic" | "password">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState<null | "magic" | "password" | "google">(null);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [recovery, setRecovery] = useState(false);
+  const [loading, setLoading] = useState<null | "magic" | "password" | "google" | "reset">(null);
+
+  useEffect(() => {
+    if (window.location.hash.includes("type=recovery")) setRecovery(true);
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setRecovery(true);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (password.length < 8) return toast.error("Password must be at least 8 characters.");
+    if (password !== confirmPassword) return toast.error("Passwords don't match.");
+    setLoading("reset");
+    const { error } = await supabase.auth.updateUser({ password });
+    setLoading(null);
+    if (error) return toast.error(error.message);
+    toast.success("Password saved.");
+    navigate({ to: "/dashboard" });
+  }
 
   async function handleMagic(e: React.FormEvent) {
     e.preventDefault();
@@ -90,6 +112,47 @@ function AuthPage() {
           </p>
 
           <div className="moss-card w-full max-w-sm rounded-2xl p-6">
+          {recovery ? (
+            <form onSubmit={handleReset} className="space-y-4">
+              <div>
+                <p className="text-lg font-normal">Set a new password</p>
+                <p className="mt-1 text-sm font-light text-foreground/60">
+                  Choose a password for your Inside account.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={loading !== null}
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {loading === "reset" ? <Loader2 className="size-4 animate-spin" /> : "Save password"}
+              </Button>
+            </form>
+          ) : (
           <Tabs value={mode} onValueChange={(v) => setMode(v as "magic" | "password")}>
             <TabsList className="grid w-full grid-cols-2 mb-5">
               <TabsTrigger value="password">Password</TabsTrigger>
@@ -154,7 +217,10 @@ function AuthPage() {
               </form>
             </TabsContent>
           </Tabs>
+          )}
 
+          {recovery ? null : (
+          <>
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-foreground/10" />
@@ -182,6 +248,8 @@ function AuthPage() {
             )}
             Sign in with Google
           </button>
+          </>
+          )}
         </div>
       </PageEnter>
     </main>

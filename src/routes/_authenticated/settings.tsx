@@ -82,7 +82,8 @@ import {
   resolveAvatarUrl,
   saveUserProfile,
 } from "@/lib/user-profile";
-import { sendTeamInviteEmail } from "@/lib/api/email.functions";
+import { sendPasswordResetEmail, sendTeamInviteEmail } from "@/lib/api/email.functions";
+import { loadEmailLanguage } from "@/lib/email-templates";
 import { fetchStripeIntegrationStatus, disconnectStripeConnect, startStripeConnect } from "@/lib/api/stripe.functions";
 import type { StripeIntegrationStatus } from "@/lib/stripe-analytics";
 
@@ -412,12 +413,16 @@ function SettingsPage() {
   async function sendResetLink() {
     if (!email) return;
     setSendingReset(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth`,
-    });
-    setSendingReset(false);
-    if (error) return toast.error(error.message);
-    toast.success("Reset link sent to your email.");
+    try {
+      await sendPasswordResetEmail({
+        data: { origin: window.location.origin, language: loadEmailLanguage("password-reset") },
+      });
+      toast.success("Reset link sent to your email.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send the reset email.");
+    } finally {
+      setSendingReset(false);
+    }
   }
 
   async function sendInvite() {
@@ -442,7 +447,11 @@ function SettingsPage() {
     setInviteEmail("");
     try {
       await sendTeamInviteEmail({
-        data: { email: trimmed, origin: window.location.origin },
+        data: {
+          email: trimmed,
+          origin: window.location.origin,
+          language: loadEmailLanguage("team-invite"),
+        },
       });
       toast.success("Invite sent. They'll stay Pending until they accept.");
     } catch (err) {
@@ -468,7 +477,11 @@ function SettingsPage() {
     setResendingId(member.id);
     try {
       await sendTeamInviteEmail({
-        data: { email: member.email, origin: window.location.origin },
+        data: {
+          email: member.email,
+          origin: window.location.origin,
+          language: loadEmailLanguage("team-invite"),
+        },
       });
       if (member.status === "Inactive") {
         persistTeam(team.map((item) => (item.id === member.id ? { ...item, status: "Pending" } : item)));

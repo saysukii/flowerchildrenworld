@@ -1,12 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  PublicFormLayout,
-  Field,
-  fieldInputCls,
-  SubmitButton,
-  SuccessState,
-} from "@/components/public-form-layout";
+import { PublicFormFields } from "@/components/public-form-fields";
+import { PublicFormLayout, SubmitButton, SuccessState } from "@/components/public-form-layout";
 import { submitPublicForm } from "@/lib/public-form-submit";
 
 export const Route = createFileRoute("/partner")({
@@ -60,37 +55,7 @@ function PartnerPage() {
         <SuccessState message="Thank you for reaching out. Check your email for confirmation — we'll connect with you shortly." />
       ) : (
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <Field label="Contact name">
-            <input required name="contact_name" className={fieldInputCls} />
-          </Field>
-          <Field label="Organization name">
-            <input required name="organization_name" className={fieldInputCls} />
-          </Field>
-          <Field label="Email">
-            <input required name="email" type="email" className={fieldInputCls} />
-          </Field>
-          <Field label="Phone (optional)">
-            <input name="phone" type="tel" className={fieldInputCls} />
-          </Field>
-          <Field label="Partnership type">
-            <select name="partnership_type" className={fieldInputCls}>
-              <option>Corporate</option>
-              <option>Community</option>
-              <option>Media</option>
-              <option>Other</option>
-            </select>
-          </Field>
-          <Field label="How would you like to show up?">
-            <textarea
-              name="show_up"
-              rows={3}
-              placeholder="Funding, mentorship, venue, supplies, time..."
-              className={fieldInputCls}
-            />
-          </Field>
-          <Field label="Message (optional)">
-            <textarea name="message" rows={3} className={fieldInputCls} />
-          </Field>
+          <PublicFormFields formId="partner" />
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <div className="pt-2">
             <SubmitButton disabled={submitting}>

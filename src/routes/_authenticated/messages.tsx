@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { WASH_BUTTON_CLASS } from "@/lib/wash-button";
 import { sendMentionEmails } from "@/lib/api/email.functions";
+import { loadEmailLanguage } from "@/lib/email-templates";
 import { isDevMock, MOCK_TEAM_MEMBERS } from "@/lib/dev-mock-data";
 import {
   caretOffset,
@@ -414,6 +415,7 @@ function MessagesPage() {
           email: member.email.trim(),
           name: member.name,
         })),
+        language: loadEmailLanguage("message-mention"),
       },
     }).then(
       (result) => {

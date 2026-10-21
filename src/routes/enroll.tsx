@@ -1,12 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  PublicFormLayout,
-  Field,
-  fieldInputCls,
-  SubmitButton,
-  SuccessState,
-} from "@/components/public-form-layout";
+import { PublicFormFields } from "@/components/public-form-fields";
+import { PublicFormLayout, SubmitButton, SuccessState } from "@/components/public-form-layout";
 import { submitPublicForm } from "@/lib/public-form-submit";
 
 export const Route = createFileRoute("/enroll")({
@@ -62,41 +57,7 @@ function EnrollPage() {
         <SuccessState message="Thank you — check your email for confirmation. We'll be in touch with next steps." />
       ) : (
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <Field label="Child full name">
-            <input required name="child_name" className={fieldInputCls} />
-          </Field>
-          <Field label="Date of birth">
-            <input required name="date_of_birth" type="date" className={fieldInputCls} />
-          </Field>
-          <Field label="Program interest">
-            <select name="program" className={fieldInputCls}>
-              <option>Full-Time</option>
-              <option>Drop-In</option>
-              <option>Event</option>
-            </select>
-          </Field>
-          <Field label="Guardian name">
-            <input required name="guardian_name" className={fieldInputCls} />
-          </Field>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Guardian email">
-              <input required name="guardian_email" type="email" className={fieldInputCls} />
-            </Field>
-            <Field label="Guardian phone">
-              <input name="guardian_phone" type="tel" className={fieldInputCls} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Emergency contact name">
-              <input required name="emergency_contact_name" className={fieldInputCls} />
-            </Field>
-            <Field label="Emergency contact phone">
-              <input required name="emergency_contact_phone" type="tel" className={fieldInputCls} />
-            </Field>
-          </div>
-          <Field label="Notes (optional)">
-            <textarea name="notes" rows={3} className={fieldInputCls} />
-          </Field>
+          <PublicFormFields formId="enroll" />
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <div className="pt-2">
             <SubmitButton disabled={submitting}>

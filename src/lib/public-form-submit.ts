@@ -9,6 +9,7 @@ import {
   type PartnerRecord,
   type VolunteerRecord,
 } from "@/lib/community";
+import { FORM_CONFIRMATION_TEMPLATE, loadEmailLanguage } from "@/lib/email-templates";
 
 const API_BASE = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -117,7 +118,10 @@ export async function submitPublicForm(payload: FormSubmission) {
   const response = await fetch(`${API_BASE}/api/forms/submit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      email_language: loadEmailLanguage(FORM_CONFIRMATION_TEMPLATE[payload.type]),
+    }),
   });
 
   const data = (await response.json()) as { ok?: boolean; error?: string; emailSent?: boolean };

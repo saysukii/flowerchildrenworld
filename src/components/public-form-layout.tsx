@@ -101,10 +101,10 @@ export function SuccessState({ message }: { message: string }) {
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export function AvailabilityPicker() {
+export function AvailabilityPicker({ label = "Availability" }: { label?: string }) {
   return (
     <div>
-      <span className="mb-1.5 block text-xs font-light text-foreground/60">Availability</span>
+      <span className="mb-1.5 block text-xs font-light text-foreground/60">{label}</span>
       <div className="flex flex-wrap gap-1.5">
         {DAYS.map((d) => (
           <label

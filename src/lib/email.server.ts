@@ -1,22 +1,10 @@
-import teamInviteHtml from "@/emails/templates/team-invite.html?raw";
-import volunteerConfirmationHtml from "@/emails/templates/volunteer-confirmation.html?raw";
-import partnerConfirmationHtml from "@/emails/templates/partner-confirmation.html?raw";
-import enrollmentConfirmationHtml from "@/emails/templates/enrollment-confirmation.html?raw";
-import messageMentionHtml from "@/emails/templates/message-mention.html?raw";
-
+import { renderEmailTemplate as renderEmailHtml } from "@/lib/email-render";
 import {
   EMAIL_LOGO_PATH,
   getEmailTemplateMeta,
+  type EmailLanguage,
   type EmailTemplateId,
 } from "@/lib/email-templates";
-
-const TEMPLATE_HTML: Record<EmailTemplateId, string> = {
-  "team-invite": teamInviteHtml,
-  "volunteer-confirmation": volunteerConfirmationHtml,
-  "partner-confirmation": partnerConfirmationHtml,
-  "enrollment-confirmation": enrollmentConfirmationHtml,
-  "message-mention": messageMentionHtml,
-};
 
 export function getAppOrigin(fallback?: string) {
   const configured = process.env.APP_ORIGIN?.replace(/\/$/, "");
@@ -33,25 +21,13 @@ export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY?.trim() && process.env.EMAIL_FROM?.trim());
 }
 
-function interpolateTemplate(html: string, vars: Record<string, string>) {
-  return Object.entries(vars).reduce(
-    (result, [key, value]) => result.replaceAll(`{{${key}}}`, value),
-    html,
-  );
-}
-
 export function renderEmailTemplate(
   templateId: EmailTemplateId,
   vars: Record<string, string>,
   origin?: string,
+  language?: Partial<EmailLanguage>,
 ) {
-  const html = TEMPLATE_HTML[templateId];
-  if (!html) throw new Error(`Missing email template: ${templateId}`);
-
-  return interpolateTemplate(html, {
-    logo_url: getEmailLogoUrl(origin),
-    ...vars,
-  });
+  return renderEmailHtml(templateId, vars, getAppOrigin(origin), language);
 }
 
 export async function sendEmail({
@@ -93,13 +69,16 @@ export async function sendTemplatedEmail({
   to,
   vars,
   origin,
+  language,
 }: {
   templateId: EmailTemplateId;
   to: string;
   vars: Record<string, string>;
   origin?: string;
+  language?: Partial<EmailLanguage>;
 }) {
   const meta = getEmailTemplateMeta(templateId);
-  const html = renderEmailTemplate(templateId, vars, origin);
-  return sendEmail({ to, subject: meta.subject, html });
+  const html = renderEmailTemplate(templateId, vars, origin, language);
+  const subject = language?.subject?.trim() || meta.subject;
+  return sendEmail({ to, subject, html });
 }
