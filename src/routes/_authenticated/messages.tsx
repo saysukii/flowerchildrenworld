@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { WASH_BUTTON_CLASS } from "@/lib/wash-button";
 import { sendMentionEmails } from "@/lib/api/email.functions";
 import { loadEmailLanguage } from "@/lib/email-templates";
+import { formatPersonName } from "@/lib/person-name";
 import { isDevMock, MOCK_TEAM_MEMBERS } from "@/lib/dev-mock-data";
 import {
   caretOffset,
@@ -502,7 +503,7 @@ function MessagesPage() {
                       >
                         <ProfileAvatar name={member.name} size="sm" />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-normal">{member.name}</p>
+                          <p className="name-text truncate text-sm font-normal">{formatPersonName(member.name)}</p>
                           <p className="truncate text-[11px] font-light text-foreground/45">
                             {member.status === "Pending" ? "Pending · " : ""}
                             {member.email}
@@ -547,11 +548,11 @@ function MessagesPage() {
                             <div className="flex items-baseline justify-between gap-2">
                               <p
                                 className={cn(
-                                  "truncate text-sm",
+                                  "name-text truncate text-sm",
                                   unread > 0 && !active ? "font-medium" : "font-normal",
                                 )}
                               >
-                                {partner}
+                                {formatPersonName(partner)}
                               </p>
                               <span
                                 className={cn(
@@ -626,8 +627,8 @@ function MessagesPage() {
                   </button>
                   <ProfileAvatar name={threadPartnerName(activeThread, current.id)} size="sm" />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-normal">
-                      {threadPartnerName(activeThread, current.id)}
+                    <p className="name-text truncate text-sm font-normal">
+                      {formatPersonName(threadPartnerName(activeThread, current.id))}
                     </p>
                     <p className="text-[11px] font-light text-foreground/45">
                       {isGroupThread(activeThread) ? "Group" : "Direct message"}
@@ -647,7 +648,7 @@ function MessagesPage() {
                         <div className={cn("max-w-[85%] sm:max-w-[70%]", mine ? "items-end" : "items-start")}>
                           <div className={cn("mb-1 flex items-baseline gap-2", mine && "justify-end")}>
                             {!mine ? (
-                              <span className="text-xs font-normal">{message.senderName}</span>
+                              <span className="name-text text-xs font-normal">{formatPersonName(message.senderName)}</span>
                             ) : null}
                             <span className="text-[10px] font-light text-foreground/40">
                               {formatMessageTime(message.createdAt)}
@@ -705,7 +706,7 @@ function MessagesPage() {
                         >
                           <ProfileAvatar name={member.name} size="sm" />
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-normal">{member.name}</p>
+                            <p className="name-text truncate text-sm font-normal">{formatPersonName(member.name)}</p>
                             <p className="truncate text-[11px] font-light text-foreground/45">
                               {member.email}
                             </p>
@@ -835,7 +836,7 @@ function MessagesPage() {
                   >
                     <ProfileAvatar name={member.name} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-normal">{member.name}</p>
+                            <p className="name-text truncate text-sm font-normal">{formatPersonName(member.name)}</p>
                       <p className="truncate text-[11px] font-light text-foreground/45">
                         {member.role}
                         {member.email ? ` · ${member.email}` : ""}

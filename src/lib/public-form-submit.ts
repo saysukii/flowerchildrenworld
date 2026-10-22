@@ -2,7 +2,6 @@ import {
   appendRecordsForTab,
   loadCommunityStore,
   saveChildWithGuardian,
-  saveCommunityStore,
   todayAddedAt,
   type ChildRecord,
   type GuardianRecord,
@@ -110,10 +109,6 @@ export function applyFormSubmission(store: ReturnType<typeof loadCommunityStore>
   return saveChildWithGuardian(store, child, guardian, true);
 }
 
-function recordFormSubmission(payload: FormSubmission) {
-  saveCommunityStore(applyFormSubmission(loadCommunityStore(), payload));
-}
-
 export async function submitPublicForm(payload: FormSubmission) {
   const response = await fetch(`${API_BASE}/api/forms/submit`, {
     method: "POST",
@@ -130,6 +125,5 @@ export async function submitPublicForm(payload: FormSubmission) {
     throw new Error(data.error ?? "Something went wrong. Please try again.");
   }
 
-  recordFormSubmission(payload);
   return data;
 }

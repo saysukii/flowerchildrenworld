@@ -153,16 +153,31 @@ export function loadEmailLanguage(id: EmailTemplateId): EmailLanguage {
   }
 }
 
+export function readPersistedEmailCopy(): Partial<Record<EmailTemplateId, EmailLanguage>> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(EMAIL_COPY_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as Partial<Record<EmailTemplateId, EmailLanguage>>;
+    return saved && typeof saved === "object" ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+export function adoptEmailCopy(document: unknown) {
+  if (!document || typeof document !== "object" || Array.isArray(document)) return;
+  window.localStorage.setItem(EMAIL_COPY_KEY, JSON.stringify(document));
+}
+
 export function saveEmailLanguage(id: EmailTemplateId, language: EmailLanguage) {
   if (typeof window === "undefined") return;
-  let saved: Partial<Record<EmailTemplateId, EmailLanguage>> = {};
-  try {
-    saved = JSON.parse(window.localStorage.getItem(EMAIL_COPY_KEY) || "{}");
-  } catch {
-    saved = {};
-  }
+  const saved = readPersistedEmailCopy() ?? {};
   saved[id] = language;
   window.localStorage.setItem(EMAIL_COPY_KEY, JSON.stringify(saved));
+  void import("@/lib/workspace-sync")
+    .then(({ publishWorkspaceDocument }) => publishWorkspaceDocument("email-copy", saved))
+    .catch(() => undefined);
 }
 
 export function getEmailTemplateMeta(id: EmailTemplateId) {

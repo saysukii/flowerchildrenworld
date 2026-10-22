@@ -164,7 +164,7 @@ export function WhiteboardStylePanel({
               setTab(key);
             }}
             className={cn(
-              "relative text-xs font-medium capitalize transition-colors",
+              "relative text-xs font-medium transition-colors",
               compact ? "pb-3 pt-1" : "pb-2.5",
               tab === key ? "text-foreground" : "text-foreground/35 hover:text-foreground/55",
             )}

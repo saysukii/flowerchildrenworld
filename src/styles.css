@@ -2,6 +2,10 @@
 @source "../src";
 @import "tw-animate-css";
 
+.name-text {
+  text-transform: none;
+}
+
 .font-label {
   font-family: 'Excalifont', cursive;
   font-size: 17px;
@@ -90,7 +94,7 @@
 .font-adigiana {
   font-family: 'Adigiana Toybox', cursive;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
+  text-transform: lowercase;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -356,6 +360,16 @@
     display: none;
     width: 0;
     height: 0;
+  }
+
+  html, body,
+  button, input, select, textarea, optgroup {
+    text-transform: lowercase;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    text-transform: lowercase;
   }
 
   html, body {

@@ -322,7 +322,7 @@ function ColorSwatch({
       </span>
       <span className="mt-2">
         <span className="block text-xs font-normal">{color.name || "Untitled"}</span>
-        <span className="block text-[10px] font-light uppercase tracking-wider text-foreground/40">{color.hex}</span>
+        <span className="block text-[10px] font-light tracking-wider text-foreground/40">{color.hex}</span>
         <span className="block text-[11px] font-light leading-snug text-foreground/60">{color.usage || "—"}</span>
       </span>
     </>

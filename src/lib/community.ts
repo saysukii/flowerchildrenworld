@@ -131,37 +131,47 @@ export const COMMUNITY_CSV_FIELDS: Record<CommunityTab, CsvFieldDef[]> = {
   ],
 };
 
-export function loadCommunityStore(): CommunityStore {
-  if (typeof window === "undefined") return EMPTY_STORE;
+function parseCommunityStore(parsed: Partial<CommunityStore>): CommunityStore {
+  return {
+    children: Array.isArray(parsed.children)
+      ? parsed.children.map((child) => ({
+          ...child,
+          guardianId: child.guardianId ?? "",
+        }))
+      : [],
+    guardians: Array.isArray(parsed.guardians)
+      ? parsed.guardians.map((guardian) => ({
+          ...guardian,
+          status: guardian.status || "Active",
+        }))
+      : [],
+    volunteers: Array.isArray(parsed.volunteers) ? parsed.volunteers : [],
+    partners: Array.isArray(parsed.partners) ? parsed.partners : [],
+  };
+}
+
+/** The directory saved in this browser. Null when this browser has not saved one. */
+export function readPersistedCommunity(): CommunityStore | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      if (isDevMock) return MOCK_COMMUNITY_STORE;
-      return EMPTY_STORE;
-    }
-    const parsed = JSON.parse(raw) as Partial<CommunityStore>;
-    const store: CommunityStore = {
-      children: Array.isArray(parsed.children)
-        ? parsed.children.map((child) => ({
-            ...child,
-            guardianId: child.guardianId ?? "",
-          }))
-        : [],
-      guardians: Array.isArray(parsed.guardians)
-        ? parsed.guardians.map((guardian) => ({
-            ...guardian,
-            status: guardian.status || "Active",
-          }))
-        : [],
-      volunteers: Array.isArray(parsed.volunteers) ? parsed.volunteers : [],
-      partners: Array.isArray(parsed.partners) ? parsed.partners : [],
-    };
-    if (isDevMock && isCommunityStoreEmpty(store)) return MOCK_COMMUNITY_STORE;
-    return store;
+    if (!raw) return null;
+    return parseCommunityStore(JSON.parse(raw) as Partial<CommunityStore>);
   } catch {
-    if (isDevMock) return MOCK_COMMUNITY_STORE;
-    return EMPTY_STORE;
+    return null;
   }
+}
+
+export function adoptCommunityStore(store: CommunityStore) {
+  writeCommunityLocal(parseCommunityStore(store));
+}
+
+export function loadCommunityStore(): CommunityStore {
+  if (typeof window === "undefined") return EMPTY_STORE;
+  const store = readPersistedCommunity();
+  if (!store) return isDevMock ? MOCK_COMMUNITY_STORE : EMPTY_STORE;
+  if (isDevMock && isCommunityStoreEmpty(store)) return MOCK_COMMUNITY_STORE;
+  return store;
 }
 
 function isCommunityStoreEmpty(store: CommunityStore) {
@@ -191,6 +201,9 @@ function mergeById<T extends { id: string }>(local: T[], remote: T[]) {
 export function saveCommunityStore(store: CommunityStore) {
   writeCommunityLocal(store);
   if (typeof window === "undefined") return;
+  void import("@/lib/workspace-sync")
+    .then(({ publishWorkspaceDocument }) => publishWorkspaceDocument("community", store))
+    .catch(() => undefined);
   void import("@/lib/api/google.functions")
     .then(({ pushCommunityDirectory }) => pushCommunityDirectory({ data: { store } }))
     .catch(() => undefined);
@@ -211,12 +224,15 @@ export async function refreshCommunityFromDrive() {
     if (!raw && remoteEmpty) return null;
     const local = raw ? (JSON.parse(raw) as CommunityStore) : EMPTY_STORE;
     const merged: CommunityStore = {
-      children: mergeById(local.children ?? [], (remote.children ?? []) as ChildRecord[]),
-      guardians: mergeById(local.guardians ?? [], (remote.guardians ?? []) as GuardianRecord[]),
-      volunteers: mergeById(local.volunteers ?? [], (remote.volunteers ?? []) as VolunteerRecord[]),
-      partners: mergeById(local.partners ?? [], (remote.partners ?? []) as PartnerRecord[]),
+      children: mergeById((remote.children ?? []) as ChildRecord[], local.children ?? []),
+      guardians: mergeById((remote.guardians ?? []) as GuardianRecord[], local.guardians ?? []),
+      volunteers: mergeById((remote.volunteers ?? []) as VolunteerRecord[], local.volunteers ?? []),
+      partners: mergeById((remote.partners ?? []) as PartnerRecord[], local.partners ?? []),
     };
     writeCommunityLocal(merged);
+    void import("@/lib/workspace-sync")
+      .then(({ publishWorkspaceDocument }) => publishWorkspaceDocument("community", merged))
+      .catch(() => undefined);
     return merged;
   } catch {
     return null;

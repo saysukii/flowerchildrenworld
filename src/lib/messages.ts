@@ -145,10 +145,29 @@ function readStore(): MessagesStore {
   }
 }
 
-function writeStore(store: MessagesStore, syncRemote = true) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+export function readPersistedMessages(): MessagesStore | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return normalizeStore(JSON.parse(raw) as Partial<MessagesStore>);
+  } catch {
+    return null;
+  }
+}
+
+export function adoptMessagesStore(store: MessagesStore) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeStore(store)));
   notifyMessagesChanged();
-  if (syncRemote) void pushDirectedMessages(store);
+}
+
+function writeStore(store: MessagesStore, syncRemote = true) {
+  adoptMessagesStore(store);
+  if (!syncRemote) return;
+  void pushDirectedMessages(store);
+  void import("@/lib/workspace-sync")
+    .then(({ publishWorkspaceDocument }) => publishWorkspaceDocument("messages", store))
+    .catch(() => undefined);
 }
 
 export function notifyMessagesChanged() {

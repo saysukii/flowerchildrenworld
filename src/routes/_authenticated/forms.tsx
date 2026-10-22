@@ -12,6 +12,7 @@ import {
   type FormQuestion,
   type IntakeFormId,
 } from "@/lib/form-definitions";
+import { WORKSPACE_HYDRATED_EVENT } from "@/lib/workspace-sync";
 import { getPublicFormUrl, PUBLIC_FORM_PATHS } from "@/lib/public-forms";
 
 export const Route = createFileRoute("/_authenticated/forms")({
@@ -88,6 +89,15 @@ function FormsPage() {
     setQuestions(loadFormQuestions(formId));
   }, [formId]);
 
+  useEffect(() => {
+    const reload = () => {
+      if (editing || formId === "donate") return;
+      setQuestions(loadFormQuestions(formId));
+    };
+    window.addEventListener(WORKSPACE_HYDRATED_EVENT, reload);
+    return () => window.removeEventListener(WORKSPACE_HYDRATED_EVENT, reload);
+  }, [formId, editing]);
+
   function updateQuestions(next: FormQuestion[]) {
     if (formId === "donate") return;
     setQuestions(next);
@@ -112,7 +122,7 @@ function FormsPage() {
               key={item}
               type="button"
               onClick={() => setSection(item)}
-              className={`rounded-full px-3 py-1 text-sm font-normal capitalize ${
+              className={`rounded-full px-3 py-1 text-sm font-normal ${
                 section === item ? "bg-[#3AB819]/15 text-[#1f6b12]" : "text-foreground/45 hover:bg-black/5"
               }`}
             >

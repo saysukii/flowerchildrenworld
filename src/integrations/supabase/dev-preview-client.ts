@@ -55,13 +55,25 @@ export function createDevPreviewClient(): SupabaseClient<Database> {
     query[method] = () => query;
   }
 
+  const DEV_SIGNED_OUT = "fcw-dev-signed-out";
+
+  function devSignedOut() {
+    return typeof sessionStorage !== "undefined" && sessionStorage.getItem(DEV_SIGNED_OUT) === "1";
+  }
+
   const auth = {
-    getSession: async () => ({ data: { session }, error: null }),
-    getUser: async () => ({ data: { user }, error: null }),
+    getSession: async () => ({ data: { session: devSignedOut() ? null : session }, error: null }),
+    getUser: async () => ({ data: { user: devSignedOut() ? null : user }, error: null }),
     getClaims: async () => ({ data: null, error: null }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
-    signOut: async () => ({ error: null }),
-    signInWithPassword: async () => ({ data: { session, user }, error: null }),
+    signOut: async () => {
+      sessionStorage.setItem(DEV_SIGNED_OUT, "1");
+      return { error: null };
+    },
+    signInWithPassword: async () => {
+      sessionStorage.removeItem(DEV_SIGNED_OUT);
+      return { data: { session, user }, error: null };
+    },
     signInWithOtp: async () => ({
       data: {},
       error: { message: "Magic links need Supabase keys in .env." },

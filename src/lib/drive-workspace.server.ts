@@ -106,7 +106,10 @@ async function liveAccessToken(grant: WorkspaceGrant) {
   const expires = grant.accessExpiresAt ? Date.parse(grant.accessExpiresAt) : 0;
   if (grant.accessToken && expires > Date.now() + 60_000) return grant.accessToken;
   const refreshed = await exchangeGoogleRefreshToken(grant.refreshToken);
-  if (!refreshed.ok) return grant.accessToken;
+  if (!refreshed.ok) {
+    if (grant.accessToken && expires > Date.now()) return grant.accessToken;
+    return null;
+  }
   const supabase = adminClient();
   const accessExpiresAt = new Date(Date.now() + Math.max(refreshed.expiresIn - 120, 30) * 1000).toISOString();
   await supabase
@@ -119,6 +122,55 @@ async function liveAccessToken(grant: WorkspaceGrant) {
     })
     .eq("id", "default");
   return refreshed.accessToken;
+}
+
+export async function issueWorkspaceGoogleAccess() {
+  const grant = await loadGrant();
+  if (!grant?.refreshToken) return { connected: false as const };
+  const expires = grant.accessExpiresAt ? Date.parse(grant.accessExpiresAt) : 0;
+  if (grant.accessToken && expires > Date.now() + 60_000) {
+    return {
+      connected: true as const,
+      email: WORKSPACE_GOOGLE_EMAIL,
+      accessToken: grant.accessToken,
+      expiresIn: Math.max(60, Math.floor((expires - Date.now()) / 1000)),
+    };
+  }
+  const refreshed = await exchangeGoogleRefreshToken(grant.refreshToken);
+  if (!refreshed.ok) {
+    if (grant.accessToken && expires > Date.now() + 5_000) {
+      return {
+        connected: true as const,
+        email: WORKSPACE_GOOGLE_EMAIL,
+        accessToken: grant.accessToken,
+        expiresIn: Math.max(30, Math.floor((expires - Date.now()) / 1000)),
+      };
+    }
+    return { connected: false as const };
+  }
+  const accessExpiresAt = new Date(Date.now() + Math.max(refreshed.expiresIn - 120, 30) * 1000).toISOString();
+  await adminClient()
+    ?.from("workspace_google_connection")
+    .update({
+      access_token: refreshed.accessToken,
+      refresh_token: refreshed.refreshToken ?? grant.refreshToken,
+      access_expires_at: accessExpiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", "default");
+  return {
+    connected: true as const,
+    email: WORKSPACE_GOOGLE_EMAIL,
+    accessToken: refreshed.accessToken,
+    expiresIn: refreshed.expiresIn,
+  };
+}
+
+export async function clearWorkspaceGoogleGrant() {
+  const supabase = adminClient();
+  if (!supabase) return { cleared: false as const };
+  const { error } = await supabase.from("workspace_google_connection").delete().eq("id", "default");
+  return { cleared: !error };
 }
 
 async function driveJson<T>(token: string, url: string, init?: RequestInit): Promise<T | null> {

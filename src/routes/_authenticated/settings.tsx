@@ -68,15 +68,18 @@ import {
 } from "@/lib/page-access";
 import { WASH_BUTTON_CLASS } from "@/lib/wash-button";
 import { getDisplayName, isAdmin } from "@/lib/user-role";
+import { formatPersonName } from "@/lib/person-name";
 
 import {
   GOOGLE_INTEGRATION_SCOPES,
   clearGoogleAccessToken,
+  ensureGoogleAccessToken,
   googleIntegrationFromSession,
   readGoogleAccessToken,
   readGoogleRefreshToken,
 } from "@/lib/google";
-import { saveWorkspaceGoogleGrant } from "@/lib/api/google.functions";
+import { clearWorkspaceGoogleGrant, saveWorkspaceGoogleGrant } from "@/lib/api/google.functions";
+import { WORKSPACE_HYDRATED_EVENT } from "@/lib/workspace-sync";
 import {
   fileToAvatarDataUrl,
   resolveAvatarUrl,
@@ -281,6 +284,9 @@ function SettingsPage() {
       }
       setIntegrations(loadIntegrations());
       syncGoogleIntegration(data.session);
+      void ensureGoogleAccessToken(data.session).then(() => {
+        syncGoogleIntegration(data.session);
+      });
       const refreshToken = data.session?.provider_refresh_token || readGoogleRefreshToken();
       const accessToken = data.session?.provider_token || readGoogleAccessToken();
       if (userIsAdmin && refreshToken && accessToken) {
@@ -308,6 +314,12 @@ function SettingsPage() {
 
     return () => authListener.subscription.unsubscribe();
   }, [syncGoogleIntegration, refreshStripeStatus]);
+
+  useEffect(() => {
+    const refresh = () => setTeam(loadTeamMembers());
+    window.addEventListener(WORKSPACE_HYDRATED_EVENT, refresh);
+    return () => window.removeEventListener(WORKSPACE_HYDRATED_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -514,7 +526,7 @@ function SettingsPage() {
         scopes: GOOGLE_INTEGRATION_SCOPES,
         queryParams: {
           access_type: "offline",
-          ...(readGoogleRefreshToken() ? {} : { prompt: "consent" }),
+          prompt: "consent",
         },
       },
     });
@@ -526,10 +538,11 @@ function SettingsPage() {
 
   function disconnectGoogle() {
     clearGoogleAccessToken();
+    void clearWorkspaceGoogleGrant({ data: {} }).catch(() => undefined);
     const next = { ...integrations, google: { connected: false, accountName: "", spreadsheetId: "" } };
     setIntegrations(next);
     saveIntegrations(next);
-    toast.success("Google disconnected in this workspace.");
+    toast.success("Google disconnected.");
   }
 
   async function connectStripe() {
@@ -655,7 +668,7 @@ function SettingsPage() {
                     onClick={() => openMemberEditor(member)}
                     className="moss-card w-full rounded-2xl p-4 text-left transition-colors hover:bg-black/[0.02]"
                   >
-                    <p className="text-sm font-normal">{member.name}</p>
+                    <p className="name-text text-sm font-normal">{formatPersonName(member.name)}</p>
                     <p className="mt-1 text-xs font-light text-foreground/60">{member.email}</p>
                     <p className="mt-2 text-xs font-light text-foreground/70">
                       {member.role} · {member.status}
@@ -683,7 +696,7 @@ function SettingsPage() {
                         className="cursor-pointer"
                         onClick={() => openMemberEditor(member)}
                       >
-                        <TableCell className="pl-4 font-light">{member.name}</TableCell>
+                        <TableCell className="name-text pl-4 font-light">{formatPersonName(member.name)}</TableCell>
                         <TableCell className="font-light text-foreground/70">{member.email}</TableCell>
                         <TableCell className="font-light text-foreground/70">
                           {member.phone || "—"}
@@ -775,6 +788,7 @@ function SettingsPage() {
                     <Label htmlFor="member-name">Name</Label>
                     <Input
                       id="member-name"
+                      className="name-text"
                       value={editDraft.name}
                       onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
                     />
@@ -931,7 +945,7 @@ function SettingsPage() {
                     }}
                     className="min-w-0 text-left"
                   >
-                    <p className="text-sm font-normal">{member.name}</p>
+                    <p className="name-text text-sm font-normal">{formatPersonName(member.name)}</p>
                     <p className="mt-0.5 truncate text-xs font-light text-foreground/55">{member.email}</p>
                     <p className="mt-1 text-xs font-light text-foreground/45">
                       {member.role} · {member.status}

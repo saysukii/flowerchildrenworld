@@ -119,16 +119,31 @@ export function loadFormQuestions(id: IntakeFormId): FormQuestion[] {
   }
 }
 
+export function readPersistedFormQuestions(): Partial<Record<IntakeFormId, FormQuestion[]>> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(FORM_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as Partial<Record<IntakeFormId, FormQuestion[]>>;
+    return saved && typeof saved === "object" ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+export function adoptFormQuestions(document: unknown) {
+  if (!document || typeof document !== "object" || Array.isArray(document)) return;
+  window.localStorage.setItem(FORM_KEY, JSON.stringify(document));
+}
+
 export function saveFormQuestions(id: IntakeFormId, questions: FormQuestion[]) {
   if (typeof window === "undefined") return;
-  let saved: Partial<Record<IntakeFormId, FormQuestion[]>> = {};
-  try {
-    saved = JSON.parse(window.localStorage.getItem(FORM_KEY) || "{}");
-  } catch {
-    saved = {};
-  }
+  const saved = readPersistedFormQuestions() ?? {};
   saved[id] = questions;
   window.localStorage.setItem(FORM_KEY, JSON.stringify(saved));
+  void import("@/lib/workspace-sync")
+    .then(({ publishWorkspaceDocument }) => publishWorkspaceDocument("form-questions", saved))
+    .catch(() => undefined);
 }
 
 export function moveQuestion(questions: FormQuestion[], index: number, direction: -1 | 1) {

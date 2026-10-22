@@ -17,6 +17,10 @@ export const Route = createFileRoute("/_authenticated")({
     const user = await getClientSessionUser();
     if (!user) throw redirect({ to: "/auth" });
 
+    await import("@/lib/workspace-sync")
+      .then(({ hydrateWorkspace }) => hydrateWorkspace())
+      .catch(() => undefined);
+
     const path = location.pathname;
     if (!ALWAYS_ALLOWED.has(path)) {
       const pageKey = pageKeyFromPath(path);

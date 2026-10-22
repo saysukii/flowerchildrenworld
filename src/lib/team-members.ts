@@ -32,26 +32,44 @@ function normalizeMember(raw: Partial<TeamMember> & { id?: string }, fallbackPag
   };
 }
 
-export function loadTeamMembers(): TeamMember[] {
-  if (typeof window === "undefined") return [];
+function readTeamArray(raw: string): TeamMember[] {
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) return [];
+  const fallback = loadLegacyMemberPageAccess();
+  return parsed
+    .map((item) => normalizeMember(item as Partial<TeamMember>, fallback))
+    .filter((m): m is TeamMember => m !== null);
+}
+
+export function readPersistedTeam(): TeamMember[] | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    const fallback = loadLegacyMemberPageAccess();
-    return parsed
-      .map((item) => normalizeMember(item as Partial<TeamMember>, fallback))
-      .filter((m): m is TeamMember => m !== null);
+    if (!raw) return null;
+    return readTeamArray(raw);
   } catch {
-    return [];
+    return null;
   }
 }
 
-export function saveTeamMembers(members: TeamMember[]) {
-  const normalized = members.map((m) => normalizeMember(m, DEFAULT_MEMBER_PAGES)).filter((m): m is TeamMember => m !== null);
+export function adoptTeamMembers(members: TeamMember[]) {
+  const normalized = members
+    .map((member) => normalizeMember(member, DEFAULT_MEMBER_PAGES))
+    .filter((member): member is TeamMember => member !== null);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
   notifyPageAccessChanged();
+}
+
+export function loadTeamMembers(): TeamMember[] {
+  return readPersistedTeam() ?? [];
+}
+
+export function saveTeamMembers(members: TeamMember[]) {
+  adoptTeamMembers(members);
+  if (typeof window === "undefined") return;
+  void import("@/lib/workspace-sync")
+    .then(({ publishWorkspaceDocument }) => publishWorkspaceDocument("team", loadTeamMembers()))
+    .catch(() => undefined);
 }
 
 export function getMemberPagesForEmail(email: string | null | undefined): PageKey[] {

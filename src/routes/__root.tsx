@@ -11,6 +11,7 @@ import { type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { GlitterCursorTrail } from "@/components/glitter-cursor-trail";
+import { IdleSignOut } from "@/components/idle-sign-out";
 import { Toaster } from "sonner";
 
 function NotFoundComponent() {
@@ -115,6 +116,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <GlitterCursorTrail />
       <Outlet />
+      <IdleSignOut />
       <Toaster
         position="bottom-center"
         toastOptions={{

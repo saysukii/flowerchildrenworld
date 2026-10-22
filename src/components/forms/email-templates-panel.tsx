@@ -12,6 +12,7 @@ import {
   type EmailTemplateId,
 } from "@/lib/email-templates";
 import { renderEmailTemplate } from "@/lib/email-render";
+import { WORKSPACE_HYDRATED_EVENT } from "@/lib/workspace-sync";
 
 const TEST_INBOX = "info@flowerchildren.world";
 
@@ -41,6 +42,15 @@ export function EmailTemplatesPanel() {
     setLanguage(loadEmailLanguage(activeId));
     setEditing(false);
   }, [activeId]);
+
+  useEffect(() => {
+    const reload = () => {
+      if (editing) return;
+      setLanguage(loadEmailLanguage(activeId));
+    };
+    window.addEventListener(WORKSPACE_HYDRATED_EVENT, reload);
+    return () => window.removeEventListener(WORKSPACE_HYDRATED_EVENT, reload);
+  }, [activeId, editing]);
 
   useEffect(() => {
     const meta = EMAIL_TEMPLATES.find((template) => template.id === activeId);

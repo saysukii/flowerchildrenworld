@@ -23,7 +23,7 @@ export function ProfileAvatar({ name, avatarUrl, size = "sm", className }: Profi
     <Avatar className={cn(SIZE_CLASSES[size], className)}>
       {avatarUrl ? <AvatarImage src={avatarUrl} alt="" className="object-cover" /> : null}
       <AvatarFallback
-        className="font-normal text-white"
+        className="name-text font-normal text-white"
         style={{ background: GREEN }}
       >
         {initial}

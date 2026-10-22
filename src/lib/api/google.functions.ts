@@ -28,6 +28,23 @@ export const saveWorkspaceGoogleGrant = createServerFn({ method: "POST" })
     return saveGrant({ ...data, connectedBy: context.userId });
   });
 
+export const restoreWorkspaceGoogle = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdminUser(context.supabase, context.userId);
+    const { issueWorkspaceGoogleAccess } = await import("@/lib/drive-workspace.server");
+    return issueWorkspaceGoogleAccess();
+  });
+
+export const clearWorkspaceGoogleGrant = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({}))
+  .handler(async ({ context }) => {
+    await assertAdminUser(context.supabase, context.userId);
+    const { clearWorkspaceGoogleGrant: clearGrant } = await import("@/lib/drive-workspace.server");
+    return clearGrant();
+  });
+
 export const pullCommunityDirectory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {

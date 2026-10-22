@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import { GOOGLE_INTEGRATION_SCOPES, readGoogleRefreshToken } from "@/lib/google";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -87,7 +88,14 @@ function AuthPage() {
     setLoading("google");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+        scopes: GOOGLE_INTEGRATION_SCOPES,
+        queryParams: {
+          access_type: "offline",
+          ...(readGoogleRefreshToken() ? {} : { prompt: "consent" }),
+        },
+      },
     });
     if (error) {
       setLoading(null);
@@ -227,7 +235,7 @@ function AuthPage() {
             </div>
             <div className="relative flex justify-center">
               <span
-                className="px-3 text-xs uppercase tracking-wider text-foreground/40"
+                className="px-3 text-xs tracking-wider text-foreground/40"
                 style={{ background: "color-mix(in srgb, #fcfcfc 55%, #f4f7dc)" }}
               >
                 or

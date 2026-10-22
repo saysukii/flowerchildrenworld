@@ -21,6 +21,7 @@ import {
 } from "@/components/message-notifications";
 import { MeadowGround } from "@/components/meadow-ground";
 import { ProfileAvatar } from "@/components/profile-avatar";
+import { formatPersonName } from "@/lib/person-name";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { getDisplayName, getRoleLabel, isAdmin } from "@/lib/user-role";
@@ -30,6 +31,7 @@ import {
   onPageAccessChanged,
   type PageKey,
 } from "@/lib/page-access";
+import { endInsideSession } from "@/lib/sign-out";
 import { getMemberPagesForEmail } from "@/lib/team-members";
 
 const NAV_ICONS: Record<string, LucideIcon> = {
@@ -63,7 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await endInsideSession();
     navigate({ to: "/auth" });
   }
 
@@ -248,7 +250,7 @@ function SidebarInner({
             <ProfileAvatar name={displayName} avatarUrl={avatarUrl} size="sm" />
           </Link>
           <div className="min-w-0 flex-1 -my-1 py-1">
-            <p className="truncate text-sm font-normal leading-tight">{displayName}</p>
+            <p className="name-text truncate text-sm font-normal leading-tight">{formatPersonName(displayName)}</p>
             <p className="text-xs text-foreground/50">{roleLabel}</p>
           </div>
           <MessageNotificationsBell className="hidden p-2 md:inline-flex" />

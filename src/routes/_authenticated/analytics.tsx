@@ -614,7 +614,7 @@ function GrowthChart({
           </p>
         </div>
         <div className="text-left sm:text-right">
-          <p className="text-[11px] font-light uppercase tracking-wider text-foreground/40">
+          <p className="text-[11px] font-light tracking-wider text-foreground/40">
             {isCurrentYear ? `${currentLabel} total` : "Year end"}
           </p>
           <p className="mt-0.5 text-2xl font-normal tabular-nums" style={{ color: GROWTH_GREEN }}>

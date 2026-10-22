@@ -1,11 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import {
   AvailabilityPicker,
   Field,
   fieldInputCls,
 } from "@/components/public-form-layout";
-import { loadFormQuestions, type FormQuestion, type IntakeFormId } from "@/lib/form-definitions";
+import { loadFormQuestions, adoptFormQuestions, type FormQuestion, type IntakeFormId } from "@/lib/form-definitions";
+import { pullPublicFormCopy } from "@/lib/api/workspace.functions";
 
 function QuestionField({ question }: { question: FormQuestion }) {
   if (question.type === "availability") {
@@ -50,7 +51,21 @@ function QuestionField({ question }: { question: FormQuestion }) {
 }
 
 export function PublicFormFields({ formId }: { formId: IntakeFormId }) {
-  const [questions] = useState(() => loadFormQuestions(formId));
+  const [questions, setQuestions] = useState(() => loadFormQuestions(formId));
+
+  useEffect(() => {
+    let cancelled = false;
+    void pullPublicFormCopy()
+      .then((copy) => {
+        if (cancelled || !copy.formQuestions) return;
+        adoptFormQuestions(copy.formQuestions);
+        setQuestions(loadFormQuestions(formId));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [formId]);
   const rows: ReactNode[] = [];
 
   for (let index = 0; index < questions.length; ) {

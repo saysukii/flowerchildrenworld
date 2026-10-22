@@ -60,6 +60,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { loadIntegrations } from "@/lib/integrations-config";
+import { formatPersonName } from "@/lib/person-name";
 import { isAdmin } from "@/lib/user-role";
 
 export const Route = createFileRoute("/_authenticated/community")({
@@ -190,14 +191,15 @@ function TypeMark({ value }: { value: string }) {
 }
 
 function RecordName({ name, onOpen }: { name: string; onOpen?: () => void }) {
-  if (!onOpen) return <>{name}</>;
+  const label = formatPersonName(name);
+  if (!onOpen) return <span className="name-text">{label}</span>;
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="text-left underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground"
+      className="name-text text-left underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground"
     >
-      {name}
+      {label}
     </button>
   );
 }
@@ -1111,6 +1113,7 @@ function ConnectedGuardianEditor({
     <div className="space-y-3 rounded-2xl border border-black/5 bg-[#FCFCFC] px-4 py-4">
       <span className="block text-xs font-light text-foreground/60">Connected guardian</span>
       <AppSelect
+        className="name-text"
         value={value.id}
         onChange={(e) => {
           const nextId = e.target.value;
@@ -1126,19 +1129,19 @@ function ConnectedGuardianEditor({
           if (found) onChange(found);
         }}
       >
-        <option value="">No guardian</option>
+        <option value="">no guardian</option>
         {guardians.map((guardian) => (
           <option key={guardian.id} value={guardian.id}>
-            {guardian.guardianName}
+            {formatPersonName(guardian.guardianName)}
             {guardian.email ? ` · ${guardian.email}` : ""}
           </option>
         ))}
-        <option value="new">Create a new guardian</option>
+        <option value="new">create a new guardian</option>
       </AppSelect>
       {value.id ? (
         <div className="space-y-3">
           <Field label="Guardian name">
-            <input className={inputCls} value={value.guardianName} onChange={(e) => onChange({ ...value, guardianName: e.target.value })} />
+            <input className={`${inputCls} name-text`} value={value.guardianName} onChange={(e) => onChange({ ...value, guardianName: e.target.value })} />
           </Field>
           <Field label="Email">
             <input type="email" className={inputCls} value={value.email} onChange={(e) => onChange({ ...value, email: e.target.value })} />
@@ -1147,7 +1150,7 @@ function ConnectedGuardianEditor({
             <PhoneInput value={value.phone} onChange={(phone) => onChange({ ...value, phone })} />
           </Field>
           <Field label="Emergency contact name">
-            <input className={inputCls} value={value.emergencyContactName} onChange={(e) => onChange({ ...value, emergencyContactName: e.target.value })} />
+            <input className={`${inputCls} name-text`} value={value.emergencyContactName} onChange={(e) => onChange({ ...value, emergencyContactName: e.target.value })} />
           </Field>
           <Field label="Emergency contact phone">
             <PhoneInput
@@ -1180,7 +1183,7 @@ function LinkedChildrenSummary({ childrenRecords }: { childrenRecords: ChildReco
         const age = ageFromDob(child.dateOfBirth);
         return (
         <div key={child.id} className="rounded-xl bg-white px-3 py-2.5">
-          <p className="text-sm font-normal">{child.fullName}</p>
+          <p className="name-text text-sm font-normal">{formatPersonName(child.fullName)}</p>
           <p className="mt-0.5 text-xs font-light text-foreground/55">
             {[child.program, child.status, formatDob(child.dateOfBirth), age == null ? "" : `age ${age}`].filter(Boolean).join(" · ")}
           </p>
@@ -1311,7 +1314,7 @@ function ChildrenFields({
     <>
       <Field label="Full name">
         <input
-          className={inputCls}
+          className={`${inputCls} name-text`}
           value={values.fullName}
           onChange={(e) => onChange({ ...values, fullName: e.target.value })}
         />
@@ -1418,11 +1421,11 @@ function GuardianPicker({
             No guardians yet — switch to Create new.
           </p>
         ) : (
-          <AppSelect value={selectedGuardianId} onChange={(e) => onSelectGuardian(e.target.value)}>
-            <option value="">Choose a guardian…</option>
+          <AppSelect className="name-text" value={selectedGuardianId} onChange={(e) => onSelectGuardian(e.target.value)}>
+            <option value="">choose a guardian…</option>
             {guardians.map((guardian) => (
               <option key={guardian.id} value={guardian.id}>
-                {guardian.guardianName}
+                {formatPersonName(guardian.guardianName)}
                 {guardian.email ? ` · ${guardian.email}` : ""}
               </option>
             ))}
@@ -1432,7 +1435,7 @@ function GuardianPicker({
         <div className="space-y-3">
           <Field label="Guardian name">
             <input
-              className={inputCls}
+              className={`${inputCls} name-text`}
               value={newGuardian.guardianName}
               onChange={(e) => onNewGuardianChange({ ...newGuardian, guardianName: e.target.value })}
             />
@@ -1474,7 +1477,7 @@ function GuardianFields({
       </Field>
       <Field label="Guardian name">
         <input
-          className={inputCls}
+          className={`${inputCls} name-text`}
           value={values.guardianName}
           onChange={(e) => onChange({ ...values, guardianName: e.target.value })}
         />
@@ -1534,7 +1537,7 @@ function VolunteerFields({
     <>
       <Field label="Full name">
         <input
-          className={inputCls}
+          className={`${inputCls} name-text`}
           value={values.fullName}
           onChange={(e) => onChange({ ...values, fullName: e.target.value })}
         />
@@ -1605,14 +1608,14 @@ function PartnerFields({
     <>
       <Field label="Organization name">
         <input
-          className={inputCls}
+          className={`${inputCls} name-text`}
           value={values.organizationName}
           onChange={(e) => onChange({ ...values, organizationName: e.target.value })}
         />
       </Field>
       <Field label="Contact name">
         <input
-          className={inputCls}
+          className={`${inputCls} name-text`}
           value={values.contactName}
           onChange={(e) => onChange({ ...values, contactName: e.target.value })}
         />

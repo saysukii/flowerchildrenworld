@@ -48,12 +48,13 @@ export function googleIntegrationFromSession(session: Session | null): OAuthInte
   rememberGoogleSession(session);
   const user = session?.user ?? null;
   const token = readGoogleAccessToken();
-  const hasApiAccess = Boolean(token || readGoogleRefreshToken());
+  const linkedAccount = browserStore()?.getItem(GOOGLE_WORKSPACE_KEY) || "";
+  const hasApiAccess = Boolean(token || readGoogleRefreshToken() || linkedAccount);
   const connected = hasApiAccess;
 
   return {
     connected,
-    accountName: connected ? googleAccountLabel(user, session) : "",
+    accountName: connected ? googleAccountLabel(user, session) || linkedAccount : "",
     hasApiAccess,
   };
 }
@@ -61,6 +62,7 @@ export function googleIntegrationFromSession(session: Session | null): OAuthInte
 const GOOGLE_TOKEN_KEY = "fcw-google-access-token";
 const GOOGLE_TOKEN_EXPIRY_KEY = "fcw-google-access-expires";
 const GOOGLE_REFRESH_KEY = "fcw-google-refresh-token";
+const GOOGLE_WORKSPACE_KEY = "fcw-google-workspace";
 const GOOGLE_TOKEN_TTL_MS = 50 * 60 * 1000;
 
 function browserStore() {
@@ -141,6 +143,7 @@ export function clearGoogleAccessToken() {
   store?.removeItem(GOOGLE_TOKEN_KEY);
   store?.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
   store?.removeItem(GOOGLE_REFRESH_KEY);
+  store?.removeItem(GOOGLE_WORKSPACE_KEY);
   if (typeof sessionStorage !== "undefined") {
     sessionStorage.removeItem(GOOGLE_TOKEN_KEY);
     sessionStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
@@ -185,7 +188,7 @@ async function refreshStoredGoogleAccessToken() {
           if (result.refreshToken) rememberGoogleRefreshToken(result.refreshToken);
           return result.accessToken;
         }
-        if (result.reason === "invalid") clearGoogleAccessToken();
+        if (result.reason === "invalid") browserStore()?.removeItem(GOOGLE_REFRESH_KEY);
         if (result.reason === "unconfigured") refreshUnavailable = true;
         return null;
       })
@@ -199,23 +202,53 @@ async function refreshStoredGoogleAccessToken() {
 
 export class GoogleAccessError extends Error {}
 
+let restoreInFlight: Promise<string | null> | null = null;
+
+/** Renews Calendar and Drive from the shared info@ grant saved for the workspace. */
+export async function restoreWorkspaceGoogleAccess() {
+  if (!restoreInFlight) {
+    restoreInFlight = import("@/lib/api/google.functions")
+      .then(({ restoreWorkspaceGoogle }) => restoreWorkspaceGoogle())
+      .then((result) => {
+        if (!result.connected || !result.accessToken) {
+          if (!readGoogleRefreshToken()) browserStore()?.removeItem(GOOGLE_WORKSPACE_KEY);
+          return null;
+        }
+        rememberGoogleAccessToken(result.accessToken, result.expiresIn);
+        if (result.email) browserStore()?.setItem(GOOGLE_WORKSPACE_KEY, result.email);
+        return result.accessToken;
+      })
+      .catch(() => null)
+      .finally(() => {
+        restoreInFlight = null;
+      });
+  }
+  return restoreInFlight;
+}
+
 /** Returns a live Google access token, renewing it from the saved grant when it has expired. */
 export async function ensureGoogleAccessToken(session?: Session | null) {
   rememberGoogleSession(session);
   const current = readGoogleAccessToken();
   if (current) return current;
-  return refreshStoredGoogleAccessToken();
+  const refreshed = await refreshStoredGoogleAccessToken();
+  if (refreshed) return refreshed;
+  return restoreWorkspaceGoogleAccess();
 }
 
 async function googleAuthorized(accessToken: string, request: (token: string) => Promise<Response>) {
   const first = await request(accessToken);
   if (first.status !== 401) return first;
   forgetGoogleAccessToken();
-  const next = await refreshStoredGoogleAccessToken();
-  if (!next) throw new GoogleAccessError("Google access expired. Connect Google again in Settings.");
+  const next = (await refreshStoredGoogleAccessToken()) ?? (await restoreWorkspaceGoogleAccess());
+  if (!next) {
+    if (!readGoogleRefreshToken()) browserStore()?.removeItem(GOOGLE_WORKSPACE_KEY);
+    throw new GoogleAccessError("Google access expired. Connect Google again in Settings.");
+  }
   const second = await request(next);
   if (second.status === 401) {
-    clearGoogleAccessToken();
+    forgetGoogleAccessToken();
+    browserStore()?.removeItem(GOOGLE_WORKSPACE_KEY);
     throw new GoogleAccessError("Google access expired. Connect Google again in Settings.");
   }
   return second;

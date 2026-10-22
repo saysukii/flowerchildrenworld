@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { FORM_CONFIRMATION_TEMPLATE } from "@/lib/email-templates";
+import { FORM_CONFIRMATION_TEMPLATE, type EmailLanguage } from "@/lib/email-templates";
 import { getAppOrigin, isEmailConfigured, sendTemplatedEmail } from "@/lib/email.server";
 
 const ALLOWED_ORIGIN =
@@ -120,17 +120,33 @@ export const Route = createFileRoute("/api/forms/submit")({
           email: recipientEmail,
         });
 
+        let emailSent = false;
+        let language: Partial<EmailLanguage> | undefined = email_language;
         try {
+          const { readWorkspaceDocument, writeWorkspaceDocument } = await import("@/lib/workspace-documents.server");
           const { readCommunityDirectory, writeCommunityDirectory } = await import("@/lib/drive-workspace.server");
           const { applyFormSubmission } = await import("@/lib/public-form-submit");
-          const { loadCommunityStore } = await import("@/lib/community");
-          const remote = (await readCommunityDirectory()) ?? loadCommunityStore();
-          await writeCommunityDirectory(applyFormSubmission(remote as ReturnType<typeof loadCommunityStore>, submission));
+          const { asCommunitySnapshot, mergeCommunity } = await import("@/lib/workspace-merge");
+          const [storedDirectory, storedEmail, driveDirectory] = await Promise.all([
+            readWorkspaceDocument("community"),
+            readWorkspaceDocument("email-copy"),
+            readCommunityDirectory(),
+          ]);
+          if (storedEmail?.document && typeof storedEmail.document === "object" && !Array.isArray(storedEmail.document)) {
+            const saved = (storedEmail.document as Record<string, unknown>)[templateId];
+            if (saved && typeof saved === "object") language = { ...language, ...(saved as Partial<EmailLanguage>) };
+          }
+          const snapshot = asCommunitySnapshot(storedDirectory?.document);
+          const drive = asCommunitySnapshot(driveDirectory);
+          const empty = { children: [], guardians: [], volunteers: [], partners: [] };
+          const base = mergeCommunity(snapshot ?? empty, drive ?? empty);
+          const next = applyFormSubmission(base as never, submission);
+          await writeWorkspaceDocument("community", next);
+          await writeCommunityDirectory(next);
         } catch (err) {
-          console.error("[Forms] Drive directory was not updated", err);
+          console.error("[Forms] Directory was not updated", err);
         }
 
-        let emailSent = false;
         if (isEmailConfigured()) {
           try {
             await sendTemplatedEmail({
@@ -138,7 +154,7 @@ export const Route = createFileRoute("/api/forms/submit")({
               to: recipientEmail,
               vars,
               origin: appOrigin,
-              language: email_language,
+              language,
             });
             emailSent = true;
           } catch (err) {
