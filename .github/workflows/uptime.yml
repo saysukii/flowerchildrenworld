@@ -1,0 +1,71 @@
+# Pings Inside every 15 minutes. A failed run opens one GitHub issue
+# so a Railway outage shows up the same day, not days later.
+# GitHub may delay a scheduled run; it still lands within the hour.
+
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inside is answering
+        run: |
+          set -euo pipefail
+          probe() {
+            local url="$1"
+            local attempt code
+            for attempt in 1 2 3; do
+              code="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$url" || echo "000")"
+              echo "$url attempt $attempt -> $code"
+              case "$code" in
+                2*|3*) return 0 ;;
+              esac
+              sleep 20
+            done
+            echo "Down: $url ($code)" >&2
+            return 1
+          }
+          probe "https://inside.flowerchildren.world/"
+          probe "https://inside.flowerchildren.world/auth"
+
+      - name: Open an outage issue
+        if: failure()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh label create outage --repo "$GITHUB_REPOSITORY" --color B60205 --description "Inside is not responding" 2>/dev/null || true
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label outage --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --label outage \
+            --title "Inside is not responding" \
+            --body "https://inside.flowerchildren.world/ did not answer. Railway may be down. This issue closes on its own once the site responds again."
+
+      - name: Close the outage issue
+        if: success()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          numbers="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label outage --json number --jq '.[].number')"
+          for number in $numbers; do
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" --comment "Inside is responding again."
+          done

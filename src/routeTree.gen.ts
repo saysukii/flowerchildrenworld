@@ -31,6 +31,7 @@ import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authentica
 import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
 import { Route as ApiStripeCallbackRouteImport } from './routes/api/stripe/callback'
 import { Route as ApiFormsSubmitRouteImport } from './routes/api/forms/submit'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiDonationsCheckoutRouteImport } from './routes/api/donations/checkout'
 
 const PartnerRoute = PartnerRouteImport.update({
@@ -144,6 +145,11 @@ const ApiFormsSubmitRoute = ApiFormsSubmitRouteImport.update({
   path: '/api/forms/submit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDonationsCheckoutRoute = ApiDonationsCheckoutRouteImport.update({
   id: '/api/donations/checkout',
   path: '/api/donations/checkout',
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/donate/thank-you': typeof DonateThankYouRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/donations/checkout': typeof ApiDonationsCheckoutRoute
   '/api/forms/submit': typeof ApiFormsSubmitRoute
   '/api/stripe/callback': typeof ApiStripeCallbackRoute
@@ -193,6 +200,7 @@ export interface FileRoutesByTo {
   '/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/donate/thank-you': typeof DonateThankYouRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/donations/checkout': typeof ApiDonationsCheckoutRoute
   '/api/forms/submit': typeof ApiFormsSubmitRoute
   '/api/stripe/callback': typeof ApiStripeCallbackRoute
@@ -219,6 +227,7 @@ export interface FileRoutesById {
   '/_authenticated/routine-pulse': typeof AuthenticatedRoutinePulseRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/donate/thank-you': typeof DonateThankYouRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/donations/checkout': typeof ApiDonationsCheckoutRoute
   '/api/forms/submit': typeof ApiFormsSubmitRoute
   '/api/stripe/callback': typeof ApiStripeCallbackRoute
@@ -245,6 +254,7 @@ export interface FileRouteTypes {
     | '/routine-pulse'
     | '/settings'
     | '/donate/thank-you'
+    | '/api/health'
     | '/api/donations/checkout'
     | '/api/forms/submit'
     | '/api/stripe/callback'
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/routine-pulse'
     | '/settings'
     | '/donate/thank-you'
+    | '/api/health'
     | '/api/donations/checkout'
     | '/api/forms/submit'
     | '/api/stripe/callback'
@@ -294,6 +305,7 @@ export interface FileRouteTypes {
     | '/_authenticated/routine-pulse'
     | '/_authenticated/settings'
     | '/donate/thank-you'
+    | '/api/health'
     | '/api/donations/checkout'
     | '/api/forms/submit'
     | '/api/stripe/callback'
@@ -309,6 +321,7 @@ export interface RootRouteChildren {
   EnrollRoute: typeof EnrollRoute
   JoinRoute: typeof JoinRoute
   PartnerRoute: typeof PartnerRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiDonationsCheckoutRoute: typeof ApiDonationsCheckoutRoute
   ApiFormsSubmitRoute: typeof ApiFormsSubmitRoute
   ApiStripeCallbackRoute: typeof ApiStripeCallbackRoute
@@ -471,6 +484,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiFormsSubmitRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/donations/checkout': {
       id: '/api/donations/checkout'
       path: '/api/donations/checkout'
@@ -530,6 +550,7 @@ const rootRouteChildren: RootRouteChildren = {
   EnrollRoute: EnrollRoute,
   JoinRoute: JoinRoute,
   PartnerRoute: PartnerRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiDonationsCheckoutRoute: ApiDonationsCheckoutRoute,
   ApiFormsSubmitRoute: ApiFormsSubmitRoute,
   ApiStripeCallbackRoute: ApiStripeCallbackRoute,
